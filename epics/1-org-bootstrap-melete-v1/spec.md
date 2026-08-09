@@ -217,7 +217,7 @@ src/melete/
     arpeggios.py
     intervals.py
   rhythm.py        Cross-cutting modifier: Score -> Score
-  selection.py     Coverage-aware sampling; reads session history
+  selection.py     Coverage-aware sampling; ExerciseSpec and WeightInputs
   lilypond/
     emit.py        Score -> LilyPond source text
     render.py      Adapter over the LilyPond binary
@@ -225,6 +225,20 @@ src/melete/
   config.py        Loads and validates config.toml
   cli.py           Argument parsing; wires the pipeline
 ```
+
+### Where `ExerciseSpec` lives
+
+`ExerciseSpec` — the family name plus its concrete parameters — and
+`WeightInputs` — the per-axis recency distances that produced a draw — both live
+in `selection.py`, upstream of the families.
+
+They are deliberately **not** part of the Score IR. A family's contract stays
+`params -> Score` (§7): it receives a plain parameter dictionary and knows
+nothing about the selector that chose it, exactly as it knows nothing about the
+emitter downstream. The caller unwraps an `ExerciseSpec` and dispatches. Putting
+these types in `score.py` would blur the one boundary §6 exists to keep sharp.
+
+`WeightInputs` is the structure §9 records into `session.json` for replay.
 
 ### The two load-bearing boundaries
 
@@ -450,6 +464,31 @@ it is preferable to padding with rests. Rests are notation; a player reading a
 practice sheet would reasonably read them as musical content rather than as
 filler.
 
+### Tempo
+
+`Score.tempo_range` (§6) is supplied by the **family**, not sampled as an axis.
+Each family declares a default range, overridable per family in configuration:
+
+| Family | Default | Reasoning |
+|---|---|---|
+| `chromatic` | 60–80 | Finger-independence work is slow and deliberate; speed defeats it. |
+| `scales` | 80–100 | The reference range in §12's cover-page example. |
+| `arpeggios` | 80–100 | Comparable demand to scales. |
+| `intervals` | 70–90 | String crossing and skipping cost accuracy at speed. |
+
+Tempo is deliberately **not** a sampled axis. It is a difficulty parameter, and
+letting it vary randomly across sessions would be progressive overload arriving
+through the back door — which §17 defers to v2. A static per-family range keeps
+v1 free of any progression model while still making §12's cover page, which
+prints a tempo per exercise, producible as specified.
+
+Configuration overrides it per family:
+
+```toml
+[pool.chromatic]
+tempo = [50, 70]
+```
+
 ## 8. Rhythm Modifier
 
 Rhythm is **not** a fifth family. It is a cross-cutting modifier of type
@@ -606,11 +645,29 @@ scale_types = ["ionian", "dorian", "phrygian", "major_pentatonic", "blues"]
 patterns = ["straight", "thirds", "groups_of_3", "groups_of_4"]
 traversals = ["positional", "three_note_per_string"]
 octaves = [1, 2]
+tempo = [80, 100]                    # overrides the family default (section 7)
 
 [pool.rhythm]
 subdivisions = ["eighth", "triplet_eighth", "sixteenth"]
 accent_patterns = ["none", "every_3"]
+note_value_patterns = ["straight", "long_short"]
 ```
+
+### Explicit tunings
+
+`profile` accepts a built-in name or an explicit definition, for a drop tuning
+or a non-standard instrument:
+
+```toml
+[instrument]
+profile = { name = "drop_d", tuning = [26, 33, 38, 43], fret_count = 20 }
+```
+
+`tuning` is absolute pitches, **low to high**; index 0 is the lowest string and
+every family depends on that ordering (§5). A tuning that is not strictly
+ascending is a configuration error, not a re-sortable input — silently sorting it
+would move every string index and produce correct-looking tablature for the
+wrong instrument. `fret_count` is required, for the reasons in §5.
 
 ### Notation conventions
 
@@ -707,6 +764,7 @@ generator becomes a wrong exercise on the page, which is worse than no exercise.
 | Failure | Behavior |
 |---|---|
 | Malformed or invalid configuration | Fail at load, naming the exact key and its accepted values. Never fall back to a default for a misspelled key. |
+| Explicit tuning not strictly ascending | Fail at load, naming the offending index. Never re-sort — sorting would shift every string index and engrave the wrong instrument convincingly. |
 | Pool over-constrained | Hard error naming the axis that could not be satisfied — for example, "no valid `string_set` for `bass4` with `octaves = 3`". |
 | Family emits a note outside the fretboard | A bug, not user error. Raise. |
 | LilyPond render fails | Surface LilyPond's stderr verbatim and **keep the generated `.ly` on disk** for inspection and manual re-run. Never clean up on failure. |
@@ -867,6 +925,21 @@ The development dependency group follows the Vergil Python standard: pytest,
 ruff, mypy. Python 3.14, uv-managed. Development occurs inside
 `vrg-container-run` against `dev-python`.
 
+### Installation for daily use
+
+Development happens in the container; **daily use does not**. The tool's whole
+premise is one command each morning, and requiring a container to run it would
+put a wrapper between the author and a thirty-second task.
+
+Melete is therefore installed as a standalone tool on the host — `uv tool
+install` from the repository — and run directly. The `lilypond` redistribution
+comes with it into the tool's own environment, which is precisely why the
+one-dependency constraint in this section matters: there is nothing else to
+install.
+
+Installing and confirming that first successful run is a deployment step
+distinct from merging the code, and is tracked as such in the plan.
+
 ### Rejected alternatives
 
 **`abjad`** (3.31) is a maintained Python API for building LilyPond files with
@@ -920,6 +993,17 @@ would have reached an implementer as an open question.
 | 17 | Bound exercise length with `max_notes` through the existing validity gate; accept the short final measure with `\bar "\|."` | Length varied roughly twentyfold across legal draws, making sheet size uncontrolled against a printability criterion. This is a bound, not a volume model — §17's deferral stands. |
 | 18 | State `fret_count` for every built-in profile | It determines specification validity, therefore the candidate pool, therefore the draw. Inferring it would make the same seed produce different sheets on different installations. |
 | 19 | One vocabulary registry for parameter identifiers and display names | §13's promise to name accepted values needs an enumerated set, and §12's cover page needs display names. Without one registry, config parsing, family dispatch, and the renderer drift apart. |
+
+### Resolutions from alignment review
+
+Decisions 20–22 were recorded during the `paad:alignment` check of this
+specification against `plan.md` on 2026-08-09.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 20 | Tempo is a per-family default, overridable in config; never a sampled axis | `Score.tempo_range` had no producer anywhere — not an axis, not a config key — while §12's cover page prints a tempo per exercise. Sampling it would introduce difficulty variation, which is progressive overload and belongs to v2. |
+| 21 | `ExerciseSpec` and `WeightInputs` live in `selection.py`, upstream of the families | §4's pipeline named `ExerciseSpec` but no module owned it. Placing it in `score.py` would blur the family/emitter seam; families keep the `params -> Score` contract of §7 and stay ignorant of the selector. |
+| 22 | An explicit tuning that is not strictly ascending is a load error, never re-sorted | Index 0 is the lowest string and every family depends on the ordering. Sorting a malformed tuning would shift every string index and engrave the wrong instrument convincingly — the silent-failure mode §13 exists to prevent. |
 
 ## 17. Deferred to v2
 

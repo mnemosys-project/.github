@@ -43,11 +43,41 @@ verbatim from the spec.
 - **No key signatures by default** — explicit accidentals throughout (spec §10).
 - **All parameter identifiers come from `vocabulary.py`** (spec §13,
   decision #19). No module hardcodes an identifier string.
+- **Tempo is a per-family default, overridable in config, never sampled**
+  (spec §7, decision #20).
+- **Families take `params: dict` and return `Score`** (spec §7). `ExerciseSpec`
+  and `WeightInputs` live in `selection.py`, upstream of the families
+  (decision #21). No family imports from `selection`.
+- **An explicit tuning that is not strictly ascending is a load error**, never
+  re-sorted (spec §13, decision #22).
 - **Validation is `vrg-container-run -- vrg-validate` and nothing else.** Do not
   invoke individual linters.
 - **Git and GitHub go through `vrg-git` and `vrg-gh`.** Raw `git`/`gh` are denied.
 - **Agents never submit or merge PRs.** Record readiness with
   `vrg-pr-workflow report-ready`; the human runs `vrg-submit-pr`.
+
+## The REFACTOR Step
+
+Every task in Phase B ends with a REFACTOR step **before** its commit. It is
+stated once here rather than repeated verbatim in fifteen places, because it is
+identical every time and the plan preaches DRY.
+
+Red and green are already explicit in each task's steps: write the failing test,
+run it to confirm it fails, implement minimally, run it to confirm it passes.
+REFACTOR is the third beat, and the one that gets skipped unless it is written
+down:
+
+- [ ] **REFACTOR (standing step for every Phase B task)**
+  - Extract duplicated logic. The four families will grow near-identical
+    position-selection and direction-handling code — the second time you write
+    it, move it to a shared helper.
+  - Move hard-coded values to `vocabulary.py` or config. Any bare identifier
+    string in a module is a defect under the Global Constraints.
+  - Consolidate with existing patterns rather than inventing a parallel one.
+  - Improve names, then re-run the task's tests to confirm they still pass.
+
+A task is not complete until this step has been performed and its tests are
+green afterwards.
 
 ## Placement Law
 
@@ -779,6 +809,10 @@ def test_fingering_is_first_class():
 def test_params_travel_inside_the_score():
     s = generate(PROFILES["bass6"], PARAMS)
     assert s.params == PARAMS
+
+def test_default_tempo_range_is_slow_for_finger_independence():
+    # spec section 7: chromatic work is deliberate; speed defeats it.
+    assert generate(PROFILES["bass6"], PARAMS).tempo_range == (60, 80)
 ```
 
 - [ ] **Step 3: Run and confirm failure**
@@ -810,68 +844,315 @@ def test_invariant_holds_across_the_sweep(profile_name, start_fret):
 
 ## Task B6: `families/scales.py`
 
-Same shape as B5. **Files:** `src/melete/families/scales.py`,
-`tests/families/test_scales.py`.
+**Files:**
+- Create: `src/melete/families/scales.py`
+- Test: `tests/families/test_scales.py`
 
-**Interfaces:** Consumes `theory.scale_pitches`, `instrument.positions`.
-Produces `generate(profile, params) -> Score`.
+**Interfaces:**
+- Consumes: `theory.scale_pitches`, `instrument.positions`, `vocabulary`.
+- Produces: `generate(profile, params) -> Score`. Default tempo 80–100
+  (spec §7, decision #20).
+
+The largest family — roughly 24,000 variants before rhythm (spec §7).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_two_octave_ionian_ascending_note_count():
-    s = generate(PROFILES["bass6"], {
-        "root": 33, "scale_type": "ionian", "traversal": "positional",
-        "string_set": (0, 1, 2, 3), "pattern": "straight",
-        "range_octaves": 2, "direction": "up",
-    })
-    assert len(s.voice) == 15          # 2 x 7 + closing octave
+from melete.families.scales import generate
+from melete.instrument import PROFILES
+from tests.families.conftest import assert_central_invariant
 
-def test_thirds_pattern_roughly_doubles_the_note_count():
-    ...  # straight vs thirds on identical params
+BASE = {
+    "root": 33, "scale_type": "ionian", "traversal": "positional",
+    "string_set": (0, 1, 2, 3), "pattern": "straight",
+    "range_octaves": 2, "direction": "up",
+}
+
+def test_two_octave_ionian_ascending_note_count():
+    s = generate(PROFILES["bass6"], BASE)
+    assert len(s.voice) == 15               # 2 x 7 + closing octave
+
+def test_up_down_returns_without_repeating_the_apex():
+    s = generate(PROFILES["bass6"], {**BASE, "direction": "up_down"})
+    assert len(s.voice) == 29               # 15 up + 14 down
+
+def test_thirds_pattern_produces_more_notes_than_straight():
+    straight = generate(PROFILES["bass6"], BASE)
+    thirds = generate(PROFILES["bass6"], {**BASE, "pattern": "thirds"})
+    assert len(thirds.voice) > len(straight.voice)
+
+def test_three_note_per_string_puts_exactly_three_notes_on_each_string():
+    s = generate(PROFILES["bass6"],
+                 {**BASE, "traversal": "three_note_per_string"})
+    from collections import Counter
+    counts = Counter(n.string for n in s.voice)
+    assert set(counts.values()) == {3}
+
+def test_scale_content_matches_theory():
+    s = generate(PROFILES["bass6"], BASE)
+    assert {n.pitch % 12 for n in s.voice} == {(33 + o) % 12
+                                               for o in (0, 2, 4, 5, 7, 9, 11)}
+
+def test_stays_within_the_declared_string_set():
+    s = generate(PROFILES["bass6"], BASE)
+    assert {n.string for n in s.voice} <= set(BASE["string_set"])
+
+def test_default_tempo_range():
+    assert generate(PROFILES["bass6"], BASE).tempo_range == (80, 100)
 
 def test_obeys_the_central_invariant():
-    ...
+    assert_central_invariant(generate(PROFILES["bass6"], BASE))
+```
+
+- [ ] **Step 2: Run and confirm failure**
+
+```bash
+vrg-container-run -- uv run pytest tests/families/test_scales.py -v
+```
+Expected: FAIL, no module `melete.families.scales`.
+
+- [ ] **Step 3: Implement**
+
+Position selection is the family's job, not the emitter's (spec §6). For
+`positional`, choose the position minimizing total fret travel within
+`string_set`. For `three_note_per_string`, take exactly three consecutive scale
+degrees per string. `pattern` reorders the realized degree sequence before
+positions are assigned — `thirds` emits 1-3-2-4-3-5…, `groups_of_3` emits
+1-2-3, 2-3-4, 3-4-5….
+
+- [ ] **Step 4: Run and confirm pass**
+
+- [ ] **Step 5: Add the exhaustive sweep (spec §14)**
+
+```python
+import pytest
+from melete import theory
+
+@pytest.mark.parametrize("root", range(24, 36))
+@pytest.mark.parametrize("scale_type", sorted(theory.SCALES))
+def test_invariant_across_every_root_and_scale(root, scale_type):
+    params = {**BASE, "root": root, "scale_type": scale_type}
+    assert_central_invariant(generate(PROFILES["bass6"], params))
+```
+
+- [ ] **Step 6: REFACTOR** (see the standing step), then commit
+
+## Task B6a: shared family helpers
+
+**Files:**
+- Create: `src/melete/families/_shared.py`
+- Test: `tests/families/test_shared.py`
+
+Extracted during B6's REFACTOR, once the duplication between chromatic and
+scales is real rather than anticipated. Do not write this before B6.
+
+**Interfaces:**
+- Produces: `apply_direction(pitches, direction)`,
+  `assign_positions(profile, pitches, string_set, traversal)`.
+
+- [ ] **Step 1: Write the failing test for `apply_direction`**
+
+```python
+def test_up_down_does_not_repeat_the_apex():
+    assert apply_direction([1, 2, 3], "up_down") == [1, 2, 3, 2, 1]
+
+def test_down_reverses():
+    assert apply_direction([1, 2, 3], "down") == [3, 2, 1]
+```
+
+- [ ] **Step 2: Confirm failure, extract from B5/B6, confirm both families' tests still pass**
+
+- [ ] **Step 3: REFACTOR, then commit**
+
+## Task B7: `families/arpeggios.py`
+
+**Files:**
+- Create: `src/melete/families/arpeggios.py`
+- Test: `tests/families/test_arpeggios.py`
+
+**Interfaces:**
+- Consumes: `theory.chord_pitches`, `instrument.positions`, `_shared`.
+- Produces: `generate(profile, params) -> Score`. Default tempo 80–100.
+
+Axes per spec §7: `root`, `quality`, `inversion`, `traversal`, `string_set`,
+`pattern`, `range_octaves`, `direction`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+from melete.families.arpeggios import generate
+from melete.instrument import PROFILES
+from tests.families.conftest import assert_central_invariant
+
+BASE = {
+    "root": 33, "quality": "maj7", "inversion": 0,
+    "traversal": "across_strings", "string_set": (0, 1, 2, 3),
+    "pattern": "straight", "range_octaves": 1, "direction": "up",
+}
+
+def test_maj7_has_four_chord_tones_plus_the_octave():
+    s = generate(PROFILES["bass6"], BASE)
+    assert len(s.voice) == 5
+
+def test_chord_tone_content_is_root_third_fifth_seventh():
+    s = generate(PROFILES["bass6"], BASE)
+    assert {n.pitch % 12 for n in s.voice} == {(33 + o) % 12
+                                               for o in (0, 4, 7, 11)}
+
+def test_min7_flattens_the_third_and_seventh():
+    maj = generate(PROFILES["bass6"], BASE)
+    mn = generate(PROFILES["bass6"], {**BASE, "quality": "min7"})
+    assert sorted(n.pitch for n in mn.voice)[1] == \
+           sorted(n.pitch for n in maj.voice)[1] - 1
+
+def test_first_inversion_starts_on_the_third():
+    root_pos = generate(PROFILES["bass6"], BASE)
+    first = generate(PROFILES["bass6"], {**BASE, "inversion": 1})
+    assert first.voice[0].pitch % 12 == (root_pos.voice[0].pitch + 4) % 12
+
+def test_broken_pattern_reorders_without_changing_content():
+    straight = generate(PROFILES["bass6"], BASE)
+    broken = generate(PROFILES["bass6"], {**BASE, "pattern": "broken"})
+    assert sorted(n.pitch for n in broken.voice) != \
+           [n.pitch for n in broken.voice]
+    assert {n.pitch for n in broken.voice} == {n.pitch for n in straight.voice}
+
+def test_default_tempo_range():
+    assert generate(PROFILES["bass6"], BASE).tempo_range == (80, 100)
+
+def test_obeys_the_central_invariant():
+    assert_central_invariant(generate(PROFILES["bass6"], BASE))
 ```
 
 - [ ] **Step 2: Run and confirm failure**
 
 - [ ] **Step 3: Implement**
 
-Position selection is the family's job, not the emitter's (spec §6). For
-`positional`, choose the position minimizing total fret travel within
-`string_set`; for `three_note_per_string`, take exactly three consecutive scale
-degrees per string.
+`inversion` rotates the chord-tone sequence before octave expansion.
+`traversal = "across_strings"` assigns one chord tone per string where the
+`string_set` allows; `positional` keeps the hand in one position.
 
-- [ ] **Step 4: Run, sweep across all 12 roots and every scale type, commit**
+- [ ] **Step 4: Run and confirm pass**
 
-## Task B7: `families/arpeggios.py`
+- [ ] **Step 5: Add the exhaustive sweep**
 
-Same shape. Axes per spec §7: `root`, `quality`, `inversion`, `traversal`,
-`string_set`, `pattern`, `range_octaves`, `direction`.
+```python
+import pytest
+from melete.theory import CHORDS
 
-- [ ] **Step 1: Failing tests — chord tone content, inversion ordering, invariant**
-- [ ] **Step 2: Confirm failure**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Sweep all 12 roots x 12 qualities x 4 inversions, commit**
+@pytest.mark.parametrize("root", range(24, 36))
+@pytest.mark.parametrize("quality", sorted(CHORDS))
+@pytest.mark.parametrize("inversion", (0, 1, 2, 3))
+def test_invariant_across_roots_qualities_and_inversions(root, quality, inversion):
+    params = {**BASE, "root": root, "quality": quality, "inversion": inversion}
+    assert_central_invariant(generate(PROFILES["bass6"], params))
+```
+
+Inversions beyond a triad's chord-tone count must raise, not wrap silently —
+an inversion of 3 on a triad is a caller bug (spec §13).
+
+- [ ] **Step 6: REFACTOR, then commit**
 
 ## Task B8: `families/intervals.py`
 
-Same shape. This family exists because tablature makes string topology
-expressible (spec §7) — so its tests must assert **string** relationships, not
-only pitch:
+**Files:**
+- Create: `src/melete/families/intervals.py`
+- Test: `tests/families/test_intervals.py`
 
-- [ ] **Step 1: Failing tests**
+**Interfaces:**
+- Consumes: `theory`, `instrument.positions`, `_shared`.
+- Produces: `generate(profile, params) -> Score`. Default tempo 70–90.
+
+This family exists because tablature makes string topology expressible
+(spec §7); these exercises cannot be described by pitch alone. Its tests must
+therefore assert **string** relationships, not only pitch — that is the whole
+justification for decision #4, and the assertions below are where it is proven.
+
+- [ ] **Step 1: Write the failing tests**
 
 ```python
+from melete.families.intervals import generate
+from melete.instrument import PROFILES
+from tests.families.conftest import assert_central_invariant
+
+BASE = {
+    "interval": 3, "context": "diatonic", "root": 33,
+    "scale_type": "ionian", "string_skip": 0,
+    "string_set": (0, 1, 2, 3), "direction": "up",
+    "pattern": "ascending_pairs",
+}
+
+def test_diatonic_thirds_are_three_or_four_semitones():
+    s = generate(PROFILES["bass6"], BASE)
+    pitches = [n.pitch for n in s.voice]
+    for a, b in zip(pitches[::2], pitches[1::2]):
+        assert b - a in (3, 4)          # major or minor third in context
+
+def test_chromatic_context_makes_every_interval_exact():
+    s = generate(PROFILES["bass6"], {**BASE, "context": "chromatic"})
+    pitches = [n.pitch for n in s.voice]
+    for a, b in zip(pitches[::2], pitches[1::2]):
+        assert b - a == 4               # a literal third, unmodified by key
+
 def test_string_skip_1_never_uses_adjacent_strings():
-    s = generate(PROFILES["bass6"], {**PARAMS, "string_skip": 1})
+    s = generate(PROFILES["bass6"], {**BASE, "string_skip": 1})
     strings = [n.string for n in s.voice]
     for a, b in zip(strings, strings[1:]):
         assert abs(a - b) != 1
+
+def test_string_skip_2_leaves_two_strings_between():
+    s = generate(PROFILES["bass6"], {**BASE, "string_skip": 2})
+    strings = [n.string for n in s.voice]
+    assert any(abs(a - b) >= 3 for a, b in zip(strings, strings[1:]))
+
+def test_adjacent_skip_zero_uses_neighbouring_strings():
+    s = generate(PROFILES["bass6"], {**BASE, "string_skip": 0})
+    strings = [n.string for n in s.voice]
+    assert all(abs(a - b) <= 1 for a, b in zip(strings, strings[1:]))
+
+def test_descending_pairs_invert_the_pair_order():
+    up = generate(PROFILES["bass6"], BASE)
+    down = generate(PROFILES["bass6"],
+                    {**BASE, "pattern": "descending_pairs"})
+    assert [n.pitch for n in down.voice] != [n.pitch for n in up.voice]
+    assert {n.pitch for n in down.voice} == {n.pitch for n in up.voice}
+
+def test_default_tempo_range():
+    assert generate(PROFILES["bass6"], BASE).tempo_range == (70, 90)
+
+def test_obeys_the_central_invariant():
+    assert_central_invariant(generate(PROFILES["bass6"], BASE))
 ```
 
-- [ ] **Step 2-4: Confirm failure, implement, sweep, commit**
+- [ ] **Step 2: Run and confirm failure**
+
+- [ ] **Step 3: Implement**
+
+`string_skip` is a hard constraint on position assignment, not a preference. A
+pitch pair that cannot be placed at the required string distance within
+`string_set` makes the specification invalid — raise, and let §9's validity gate
+resample it. Never quietly fall back to an adjacent string; that would produce a
+plausible exercise that is not the one requested (spec §13).
+
+- [ ] **Step 4: Run and confirm pass**
+
+- [ ] **Step 5: Add the sweep across intervals and skips**
+
+```python
+import pytest
+
+@pytest.mark.parametrize("interval", range(2, 11))
+@pytest.mark.parametrize("string_skip", (0, 1, 2))
+def test_invariant_across_intervals_and_skips(interval, string_skip):
+    params = {**BASE, "interval": interval, "string_skip": string_skip}
+    try:
+        score = generate(PROFILES["bass6"], params)
+    except ValueError:
+        return          # over-constrained: section 9 resamples, not a failure
+    assert_central_invariant(score)
+```
+
+- [ ] **Step 6: REFACTOR, then commit**
 
 ## Task B9: `rhythm.py` — the cross-cutting modifier
 
@@ -908,7 +1189,30 @@ def test_accent_every_3():
     out = apply(base_score, {"accent_pattern": "every_3", ...})
     accents = [n.accent for n in flatten(out.voice)]
     assert accents[::3] == [True] * len(accents[::3])
+
+def test_long_short_alternates_written_durations():
+    out = apply(base_score, {"subdivision": "eighth",
+                             "note_value_pattern": "long_short", ...})
+    durs = [n.duration for n in flatten(out.voice)]
+    assert durs[0] > durs[1]
+    assert durs[0::2] == [durs[0]] * len(durs[0::2])
+
+def test_long_short_preserves_total_sounding_duration():
+    straight = apply(base_score, {"note_value_pattern": "straight", ...})
+    swung = apply(base_score, {"note_value_pattern": "long_short", ...})
+    assert sounding_duration(swung.voice) == sounding_duration(straight.voice)
+
+def test_short_long_is_the_mirror_of_long_short():
+    ls = apply(base_score, {"note_value_pattern": "long_short", ...})
+    sl = apply(base_score, {"note_value_pattern": "short_long", ...})
+    assert [n.duration for n in flatten(sl.voice)][:2] == \
+           list(reversed([n.duration for n in flatten(ls.voice)][:2]))
 ```
+
+The second assertion is the one that matters: a note-value pattern redistributes
+time within the pattern, it does not add or remove any. If total sounding
+duration changes, the exercise no longer fits the cycle length that §7's
+`max_notes` gate and §14's duration test both reason about.
 
 - [ ] **Step 2: Confirm failure**
 
@@ -950,8 +1254,38 @@ The highest-risk module in the plan. Spec §9 and decisions #14, #15, #17.
 **Interfaces:**
 - Consumes: `vocabulary.AXES`, `instrument`, family registry.
 - Produces:
+  - `ExerciseSpec` (frozen: `family: str`, `params: dict`)
+  - `WeightInputs` (frozen: `distances: dict[str, dict[str, int | None]]`)
   - `weight(sessions_since: int | None, horizon: int) -> float`
   - `select(config, history, rng) -> list[tuple[ExerciseSpec, WeightInputs]]`
+
+Both types live here, upstream of the families (decision #21). Families keep
+their `params: dict` signature and never import from this module.
+
+- [ ] **Step 0: Define the two types**
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ExerciseSpec:
+    family: str          # key into the family REGISTRY
+    params: dict         # passed verbatim to that family's generate()
+
+
+@dataclass(frozen=True)
+class WeightInputs:
+    """Per-axis recency distances that produced one draw.
+
+    Recorded into session.json so replay reconstructs the draw without
+    recomputing against a log that has since grown (decision #14).
+    """
+    distances: dict[str, dict[str, int | None]]   # axis -> value -> distance
+```
+
+The caller dispatches with `REGISTRY[spec.family](profile, spec.params)` — which
+is why the family signature stays a plain dict and the two sides compose.
 
 - [ ] **Step 1: Write the failing weight tests — the whole of decision #15**
 
@@ -1053,10 +1387,50 @@ def test_never_falls_back_to_a_default_for_an_unknown_key():
 
 def test_max_notes_defaults_are_present():
     assert load_string("").session.max_notes == 96
+
+def test_explicit_tuning_is_accepted():
+    cfg = load_string(
+        '[instrument]\n'
+        'profile = { name = "drop_d", tuning = [26, 33, 38, 43], '
+        'fret_count = 20 }'
+    )
+    assert cfg.instrument.tuning == (26, 33, 38, 43)
+    assert cfg.instrument.fret_count == 20
+
+def test_non_ascending_tuning_is_a_load_error_never_re_sorted():
+    """decision #22: sorting would engrave the wrong instrument convincingly."""
+    with pytest.raises(ValueError) as exc:
+        load_string(
+            '[instrument]\n'
+            'profile = { name = "bad", tuning = [33, 26, 38], fret_count = 20 }'
+        )
+    assert "1" in str(exc.value)        # names the offending index
+
+def test_explicit_tuning_without_fret_count_is_rejected():
+    with pytest.raises(ValueError):
+        load_string(
+            '[instrument]\n'
+            'profile = { name = "bad", tuning = [26, 33, 38, 43] }'
+        )
+
+def test_family_tempo_override():
+    cfg = load_string("[pool.chromatic]\ntempo = [50, 70]")
+    assert cfg.pool["chromatic"].tempo == (50, 70)
+
+def test_family_tempo_defaults_when_unset():
+    assert load_string("").pool["chromatic"].tempo == (60, 80)
 ```
 
-- [ ] **Step 2-4: Confirm failure, implement against `vocabulary.accepted`, confirm pass**
-- [ ] **Step 5: Commit**
+- [ ] **Step 2: Run and confirm failure**
+
+- [ ] **Step 3: Implement against `vocabulary.accepted`**
+
+Every rejection message lists accepted values pulled from the registry, never
+a hardcoded list (Global Constraints).
+
+- [ ] **Step 4: Run and confirm pass**
+
+- [ ] **Step 5: REFACTOR, then commit**
 
 ## Task B12: `lilypond/emit.py` — Score to LilyPond text
 
@@ -1247,24 +1621,129 @@ def test_replay_is_byte_identical_after_the_log_moves_on(tmp_path):
 
 - [ ] **Step 6: Commit**
 
-## Task B15: `cli.py` — wiring
+## Task B15a: `cli.py` — `generate` and its flags
 
-**Files:** `src/melete/cli.py`, `tests/test_cli.py`
+**Files:** `src/melete/cli.py`, `tests/test_cli_generate.py`
 
-**Interfaces:** Consumes everything. Produces the console entry point `melete`.
+**Interfaces:** Consumes everything in Phase B. Produces the console entry
+point `melete` and the `generate` subcommand.
 
-- [ ] **Step 1: Write the failing tests for each documented command (spec §11)**
+Covers every flag in spec §11's `generate` line: `--date`, `--seed`,
+`--dry-run`, `--staves`, `--count`, `--force`, `--split`.
+
+- [ ] **Step 1: Write the failing tests, one per documented flag**
 
 ```python
+from datetime import date
+import pytest
+
 def test_dry_run_prints_selections_and_renders_nothing(tmp_path):
     result = run(["generate", "--dry-run"], cwd=tmp_path)
     assert result.exit_code == 0
     assert not list(tmp_path.glob("**/*.pdf"))
+    assert "Dorian" in result.stdout or "chromatic" in result.stdout
 
 def test_generate_refuses_an_existing_session_without_force(tmp_path):
     run(["generate"], cwd=tmp_path)
     assert run(["generate"], cwd=tmp_path).exit_code != 0
     assert run(["generate", "--force"], cwd=tmp_path).exit_code == 0
+
+def test_date_writes_to_that_dated_directory(tmp_path):
+    run(["generate", "--date", "2026-08-10"], cwd=tmp_path)
+    assert (tmp_path / "sessions" / "2026-08-10").is_dir()
+
+def test_count_overrides_the_configured_exercise_count(tmp_path):
+    run(["generate", "--count", "6"], cwd=tmp_path)
+    session = read_session(tmp_path, date.today())
+    assert len(session.exercises) == 6
+
+def test_staves_override_reaches_the_emitter(tmp_path):
+    run(["generate", "--staves", "tab"], cwd=tmp_path)
+    src = (tmp_path / "sessions" / date.today().isoformat() / "src")
+    assert "\\tabFullNotation" in (src / "book.ly").read_text()
+```
+
+- [ ] **Step 2: Write the `--split` test — the flag with no implementation today**
+
+```python
+def test_split_emits_one_pdf_per_exercise_plus_the_book(tmp_path):
+    run(["generate", "--count", "3", "--split"], cwd=tmp_path)
+    d = tmp_path / "sessions" / date.today().isoformat()
+    assert (d / "practice.pdf").exists()
+    assert len(list(d.glob("exercise-*.pdf"))) == 3
+
+def test_without_split_only_the_combined_pdf_is_written(tmp_path):
+    run(["generate", "--count", "3"], cwd=tmp_path)
+    d = tmp_path / "sessions" / date.today().isoformat()
+    assert not list(d.glob("exercise-*.pdf"))
+```
+
+- [ ] **Step 3: Run and confirm every test fails**
+
+- [ ] **Step 4: Implement**
+
+`--split` renders each exercise's `Score` through `emit_score` in addition to
+the combined book — the pieces already exist from B12, this wires them.
+
+- [ ] **Step 5: Run and confirm pass**
+
+- [ ] **Step 6: Add the end-to-end smoke test (spec §14)**
+
+The `src/` assertion counts sources rather than checking the directory exists —
+§12 requires LilyPond source *per exercise and for the book*, and an
+`is_dir()` check cannot fail when that output is missing:
+
+```python
+@pytest.mark.integration
+def test_end_to_end_produces_a_practice_pdf(tmp_path):
+    assert run(["generate", "--count", "5"], cwd=tmp_path).exit_code == 0
+    d = tmp_path / "sessions" / date.today().isoformat()
+    assert (d / "practice.pdf").exists()
+    assert (d / "session.json").exists()
+
+    ly_files = list((d / "src").glob("*.ly"))
+    assert len(ly_files) == 6          # five exercises, plus the book
+```
+
+- [ ] **Step 7: REFACTOR, then commit**
+
+## Task B15b: `cli.py` — `replay`, `show`, `families`, `vocabulary`
+
+**Files:** `src/melete/cli.py` (extend), `tests/test_cli_query.py`
+
+**Blocked-by:** B15a
+
+The read-only commands. Separated from B15a because a reviewer can sensibly
+accept generation and reject these, which is the test for whether a split earns
+its keep.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+def test_replay_reproduces_a_past_session(tmp_path):
+    run(["generate", "--date", "2026-08-09"], cwd=tmp_path)
+    first = read_session(tmp_path, "2026-08-09")
+    for later in ("2026-08-10", "2026-08-11"):
+        run(["generate", "--date", later], cwd=tmp_path)
+    assert run(["replay", "2026-08-09"], cwd=tmp_path).exit_code == 0
+    assert read_session(tmp_path, "2026-08-09").exercises == first.exercises
+
+def test_show_summarizes_a_past_session(tmp_path):
+    run(["generate", "--date", "2026-08-09"], cwd=tmp_path)
+    out = run(["show", "2026-08-09"], cwd=tmp_path).stdout
+    assert "2026-08-09" in out
+    assert "bass6" in out
+
+def test_show_on_a_missing_session_fails_loudly(tmp_path):
+    result = run(["show", "1999-01-01"], cwd=tmp_path)
+    assert result.exit_code != 0
+    assert "1999-01-01" in result.stderr
+
+def test_families_lists_all_four_with_their_axes():
+    out = run(["families"]).stdout
+    for family in ("chromatic", "scales", "arpeggios", "intervals"):
+        assert family in out
+    assert "permutation" in out          # a chromatic axis
 
 def test_vocabulary_lists_every_axis():
     out = run(["vocabulary"]).stdout
@@ -1272,21 +1751,10 @@ def test_vocabulary_lists_every_axis():
         assert axis in out
 ```
 
-- [ ] **Step 2-4: Confirm failure, implement, confirm pass**
-
-- [ ] **Step 5: Add the end-to-end smoke test (spec §14)**
-
-```python
-@pytest.mark.integration
-def test_end_to_end_produces_a_practice_pdf(tmp_path):
-    assert run(["generate"], cwd=tmp_path).exit_code == 0
-    d = tmp_path / "sessions" / date.today().isoformat()
-    assert (d / "practice.pdf").exists()
-    assert (d / "session.json").exists()
-    assert (d / "src").is_dir()
-```
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 2: Run and confirm failure**
+- [ ] **Step 3: Implement**
+- [ ] **Step 4: Run and confirm pass**
+- [ ] **Step 5: REFACTOR, then commit**
 
 ---
 
@@ -1295,16 +1763,20 @@ def test_end_to_end_produces_a_practice_pdf(tmp_path):
 ## Task C1: Deploy melete into daily use
 
 **Repo:** `mnemosys-project/melete` · **Kind:** `deployment`
-**Blocked-by:** B15
+**Blocked-by:** B15b
 
 Merged is not deployed (per `epic-create`). This task's closure **is** the
-"melete is usable every morning" signal that C2 depends on.
+"melete is usable every morning" signal that C2 depends on. It implements spec
+§15 *Installation for daily use*: development happens in the container, daily
+use does not.
 
 **Precondition self-check:** `vrg-gh api repos/mnemosys-project/melete/commits/develop`
-includes the B15 merge commit.
+includes the B15b merge commit.
 
-**Procedure:** install melete into the author's environment; place a
-`config.toml` with the `bass6` profile; run `melete generate` once successfully.
+**Procedure:** `uv tool install` melete from the repository onto the host —
+outside `vrg-container-run`, since the morning command must not require a
+container. Place a `config.toml` with the `bass6` profile. Run `melete generate`
+once successfully.
 
 **Acceptance:** `melete generate` produces `sessions/<today>/practice.pdf` on the
 author's own machine. Record `Outcome: SUCCESS` or `FAILURE` as a comment.
@@ -1349,37 +1821,48 @@ failure the task stays open and the epic stays open.
 | B4 | `score.py` | `melete` | B2 |
 | B5 | `families/chromatic.py` | `melete` | B4 |
 | B6 | `families/scales.py` | `melete` | B4, B3 |
-| B7 | `families/arpeggios.py` | `melete` | B4, B3 |
-| B8 | `families/intervals.py` | `melete` | B4, B3 |
+| B6a | shared family helpers (extracted) | `melete` | B5, B6 |
+| B7 | `families/arpeggios.py` | `melete` | B4, B3, B6a |
+| B8 | `families/intervals.py` | `melete` | B4, B3, B6a |
 | B9 | `rhythm.py` | `melete` | B4 |
 | B10 | `selection.py` | `melete` | B5-B9 |
 | B11 | `config.py` | `melete` | B3 |
 | B12 | `lilypond/emit.py` | `melete` | B4 |
 | B13 | `lilypond/render.py` | `melete` | — |
 | B14 | `session.py` | `melete` | B10 |
-| B15 | `cli.py` | `melete` | B11-B14 |
-| C1 | Deploy into daily use | `melete` | B15 |
+| B15a | `cli.py` — generate and its flags | `melete` | B11-B14 |
+| B15b | `cli.py` — replay, show, families, vocabulary | `melete` | B15a |
+| C1 | Deploy into daily use | `melete` | B15b |
 | C2 | Validate on paper | `melete` | C1 |
 | — | Documentation review (#3) | `.github` | all above |
 | — | Retrospective (#4) | `.github` | #3 |
 
-B1/B2 and B13 have no dependency on each other and can run in parallel; B5–B8
-are four independent families once B4 lands.
+B1/B2 and B13 have no dependency on each other and can run in parallel. B5 and
+B6 are independent once B4 lands; B6a extracts their shared helpers afterwards,
+so B7 and B8 follow it rather than racing it. Extracting on the second
+occurrence rather than the first is deliberate — writing `_shared.py` before two
+families exist would be the anticipatory abstraction the REFACTOR step warns
+against.
 
 ## Spec Coverage
 
 | Spec section | Task |
 |---|---|
-| §4 Architecture / module layout | B1–B15 (one task per module) |
+| §4 Architecture / module layout | B1–B15b (one task per module) |
+| §4 `ExerciseSpec`, `WeightInputs` placement | B10 Step 0 |
 | §5 Instrument model, fret counts | B2 |
+| §5 User-defined tunings | B11 |
 | §6 Score IR, written durations | B4 |
 | §7 Four families, length bound, terminal bar | B5–B8, B10, B12 |
-| §8 Rhythm modifier | B9 |
+| §7 Per-family tempo defaults | B5–B8, B11 |
+| §8 Rhythm modifier, all four axes | B9 |
 | §9 Selection, weighting, validity, replay | B10, B14 |
 | §10 Configuration | B11 |
-| §11 CLI | B15 |
-| §12 Output, cover page, session log | B12, B14 |
+| §11 CLI — `generate` and flags | B15a |
+| §11 CLI — `replay`, `show`, `families`, `vocabulary` | B15b |
+| §12 Output, cover page, session log, per-exercise sources | B12, B14, B15a |
 | §13 Error handling, vocabulary registry | B3, B11, B13, B14 |
 | §14 Testing strategy | every task's test steps |
 | §15 Repo and Vergil integration | A4 |
+| §15 Installation for daily use | C1 |
 | *Document formats* | A2 |
