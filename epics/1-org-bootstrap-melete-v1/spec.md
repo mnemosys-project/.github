@@ -76,6 +76,23 @@ Two consequences follow, both carried forward deliberately:
 No future epic in this organization should reproduce this ordering. Once
 `.github` exists, the normal flow applies without exception.
 
+### Document formats are standardized as part of this epic
+
+Because this epic establishes the organization's epic structure from nothing, it
+also **standardizes the formats of the documents that structure carries** —
+`spec.md`, `plan.md`, and `retrospective.md` — rather than leaving each future
+epic to invent its own shape.
+
+This document is the first instance of the spec format and therefore doubles as
+its reference implementation. The standardized formats land in `.github`
+alongside the other org metadata, and conformance is the documentation-review
+bookend's concern.
+
+The value is compounding rather than immediate: a reader who has followed one
+epic's spec → plan → retrospective should be able to follow every subsequent
+one without relearning the layout, and an agent picking up an epic should be
+able to locate a section by name rather than by search.
+
 ## 1. Overview
 
 Melete is a standalone command-line tool that generates daily bass practice
@@ -192,6 +209,7 @@ src/melete/
   instrument.py    InstrumentProfile and fretboard queries
   score.py         The IR: Note, Tuplet, Voice, Score. Pure data.
   theory.py        Pitch, interval, scale, and chord math (12-TET integers)
+  vocabulary.py    Canonical parameter identifiers and their display names
   families/
     __init__.py    Family registry
     chromatic.py
@@ -238,13 +256,21 @@ class InstrumentProfile:
 
 Built-in profiles:
 
-| Profile  | Strings | Tuning  | Notes             |
-|----------|---------|---------|-------------------|
-| `bass4`  | 4       | E A D G | standard          |
-| `bass5`  | 5       | B E A D G | standard        |
-| `bass6`  | 6       | B E A D G C | **default**   |
+| Profile  | Strings | Tuning      | Frets | Notes         |
+|----------|---------|-------------|-------|---------------|
+| `bass4`  | 4       | E A D G     | 20    | standard      |
+| `bass5`  | 5       | B E A D G   | 24    | standard      |
+| `bass6`  | 6       | B E A D G C | 24    | **default**   |
 
-Users may define explicit tunings in configuration.
+Users may define explicit tunings and fret counts in configuration.
+
+`fret_count` is **not cosmetic and must never be inferred**. §9 rejects and
+resamples any specification requiring a fret range the profile cannot supply, so
+the fret count determines which specifications are valid, which determines the
+candidate pool, which determines what the selector draws. Two installations that
+disagreed on a profile's fret count would produce different sheets from the same
+seed, silently defeating the reproducibility guarantee in §9. The values above
+are therefore part of the profile definition, not a rendering default.
 
 A generated exercise specification is validated against the active profile. A
 specification requiring string indices or a fret range the profile cannot supply
@@ -281,7 +307,7 @@ class Score:
     params: dict                      # exact parameters that produced this
 ```
 
-Four decisions embedded here:
+Five decisions embedded here:
 
 **Pitch and position are both stored, never derived at render time.** A family
 decides both which note to play and where to play it. Fretboard position is
@@ -296,6 +322,28 @@ the single nested form, mapping directly onto LilyPond's `\tuplet 3/2 { ... }`.
 Measures are **not** modeled — durations imply barlines and LilyPond inserts
 them. Grouping against the meter (fives over 4/4) therefore requires no
 bar-splitting logic.
+
+**`Note.duration` is always the *written* value; `Tuplet.ratio` supplies the
+scaling.** A triplet of eighths is three notes of duration `1/8` inside a
+`Tuplet` with ratio `(3, 2)`. Sounding time is derived, never stored:
+
+```
+sounding(note) = note.duration * ratio[1] / ratio[0]     # inside a Tuplet
+sounding(note) = note.duration                           # otherwise
+```
+
+This is the contract at the `score.py` seam, and it must be explicit because
+`rhythm.py` and `lilypond/emit.py` sit on opposite sides of it and would
+otherwise be written against different assumptions — with every tuplet rendering
+at the wrong note value as the result.
+
+Written durations are the correct choice rather than an arbitrary one. Sounding
+durations inside a tuplet are not representable as noteheads at all: a triplet
+eighth is `1/12`, and there is no twelfth note. Storing sounding time would
+force `lilypond/emit.py` to recover a writable value by inverting the ratio,
+pushing arithmetic and a new failure mode into the one module deliberately kept
+free of both. Anything needing real time — measure math, tempo estimates, the
+length gate in §9 — applies the formula above through a single shared helper.
 
 **`params` travels inside the Score.** The session log receives the exact
 parameter dictionary that produced each exercise, so any sheet is reproducible
@@ -374,6 +422,34 @@ One exercise is **one complete cycle of its pattern** — a full two-octave scal
 traversal, a full permutation cycle, whatever the pattern's natural unit is. An
 exercise is never truncated mid-pattern.
 
+### Bounding the length
+
+A cycle is not a fixed quantity. `range_octaves`, `pattern`, and `direction`
+multiply, and §9 samples them independently: a one-octave pentatonic ascending
+straight is six notes, while a three-octave scale in thirds, up-down, is close to
+ninety. That is roughly a twentyfold spread across draws that are all legal under
+the §10 example pool, and it makes the length of the printed sheet an
+uncontrolled output when §1's success criterion is a *printable* morning sheet.
+
+`max_notes` (§10, `[session]`) bounds a single exercise. A sampled specification
+whose realized cycle exceeds it is **resampled through the same validity
+machinery §9 already applies to instrument-profile violations**, and exhausting
+the retry budget is the same loud error naming the over-constrained axis. This
+adds a bound, not a model — rolling volume and fatigue budgeting remain deferred
+to v2 per §17.
+
+### The terminal measure
+
+Because §6 does not model measures, a cycle's sounding duration is generically
+not a whole number of bars: twenty-four notes at sixteenths in 7/8 is one bar
+plus ten sixteenths. **The short final measure is accepted and closed with
+`\bar "|."`.**
+
+This is consistent with §6's deliberate stance on grouping against the meter, and
+it is preferable to padding with rests. Rests are notation; a player reading a
+practice sheet would reasonably read them as musical content rather than as
+filler.
+
 ## 8. Rhythm Modifier
 
 Rhythm is **not** a fifth family. It is a cross-cutting modifier of type
@@ -410,10 +486,31 @@ For each axis, the selector reads the last N sessions from the log and computes,
 for each candidate value, how many sessions have passed since it was last used:
 
 ```
-w(value) = 1.0                                       # never used
-w(value) = min(1.0, sessions_since / horizon)        # horizon default 14
-w(value) = 0.05                                      # used today or yesterday
+FLOOR   = 0.05
+HORIZON = 14                                    # default; configurable
+
+w(value) = 1.0                                  # never used
+w(value) = max(FLOOR, min(1.0, sessions_since / HORIZON))
 ```
+
+The weight is **one expression with the floor applied last**, deliberately, and
+not a ladder of special cases. An earlier formulation carried a separate
+"used today or yesterday" rule alongside the ratio, which made the two disagree:
+at distance 0 the ratio yields 0.0 while the special case says 0.05, and at
+distance 1 the ratio yields ≈0.071, so 0.05 was acting as a ceiling rather than
+the floor it was described as.
+
+That ambiguity was not cosmetic. Read with the ratio taking precedence, anything
+used today weighs 0.0 — *impossible*, which is the opposite of the intent — and
+because the within-session rule below pushes each selection onto the history at
+distance 0, a small pool reaches a state where every candidate weighs 0.0. A
+weighted draw over an all-zero vector has no defined result. With `shape =
+{ scales = 3 }` over `scale_types = ["ionian", "dorian"]`, the third slot hits
+exactly that, on a configuration that is otherwise perfectly legal.
+
+The single expression is monotonic, never zero, and keeps the whole weighting
+policy in one place — which is what §9's tunability requirement below actually
+needs, since swapping linear decay for exponential must remain a local change.
 
 Values are then drawn proportional to their weights. Because axes are drawn
 independently, roots spread across the chromatic scale on their own schedule
@@ -439,15 +536,45 @@ instead.
 ### Validity
 
 Validity is a hard gate, not a weight. Each sampled specification is checked
-against the active instrument profile. Invalid specifications are resampled up
-to a bounded retry count; exhausting retries is a loud error naming the
-over-constrained axis, never a silent fallback.
+against the active instrument profile **and against `max_notes`** (§7). Invalid
+specifications are resampled up to a bounded retry count; exhausting retries is a
+loud error naming the over-constrained axis, never a silent fallback.
+
+Both checks run through the same gate. A cycle that is too long and a string set
+the profile cannot supply are the same kind of failure — a specification the
+instrument or the session cannot accommodate — and neither is ever quietly
+adjusted into something renderable.
 
 ### Determinism
 
 The seed derives from the date plus a hash of the configuration and is written
-into `session.json`. `melete generate --seed <n>` reproduces a day exactly.
-Randomness is real but never irreproducible.
+into `session.json`. Randomness is real but never irreproducible.
+
+**A seed alone is not sufficient to reproduce a day, and the design accounts for
+this.** Selection depends on the session log — the weights above are computed
+from how many sessions have passed since each value was last used — and that
+history is not a function of the seed. Replaying a seed against today's log
+computes different weights than the original run did, because the log has grown
+since. The result would be a different sheet, produced silently, with no
+indication it had diverged.
+
+`session.json` is therefore **self-sufficient for replay**. Alongside the seed
+and the configuration hash it records the resolved weight inputs — the
+`sessions_since` distance per candidate value per axis — that fed that day's
+draw. Replay reads those recorded inputs rather than recomputing from the live
+log:
+
+| Invocation | Behavior |
+|---|---|
+| `melete generate` | Normal generation; computes weights from the current log. |
+| `melete generate --seed <n>` | Same seed against the **current** history. Not a reproduction, and not described as one. |
+| `melete replay <date>` | Exact reproduction from that session's recorded seed and weight inputs. |
+
+Separating the two is what makes the guarantee literally true. `--seed` remains
+useful for exploring a draw; `replay` is the operation that reproduces a sheet.
+Recording the weight inputs is a small extension of what §12 already commits
+`session.json` to holding, and it makes any past sheet auditable — not merely
+regenerable — because the inputs that produced it are on disk next to the output.
 
 ### Tunability
 
@@ -470,6 +597,7 @@ key_signatures = false               # explicit accidentals throughout
 [session]
 count = 5
 horizon = 14
+max_notes = 96                       # per-exercise length bound (section 7)
 shape = { chromatic = 1, scales = 2, arpeggios = 1, intervals = 1 }
 
 [pool.scales]
@@ -504,15 +632,25 @@ mode plain tablature is correct. This is a branch in the emitter, not a flag.
 ```
 melete generate                  # today's session
 melete generate --date 2026-08-10
-melete generate --seed 12345     # reproduce a session exactly
+melete generate --seed 12345     # fixed seed against current history
 melete generate --dry-run        # print selections, render nothing
 melete generate --staves tab     # override staff mode for one run
 melete generate --count 6
 melete generate --force          # overwrite an existing session directory
 melete generate --split          # also emit one PDF per exercise
+melete replay 2026-08-09         # reproduce a past session exactly
 melete show 2026-08-09           # summarize a past session
 melete families                  # list families and their parameter axes
+melete vocabulary                # list every axis and its accepted values
 ```
+
+`replay` and `--seed` are deliberately distinct; see §9 *Determinism*. `replay`
+reconstructs a session from its recorded seed and weight inputs and is the only
+operation that reproduces a sheet exactly. `--seed` fixes the draw against
+whatever history exists now.
+
+`vocabulary` prints the canonical registry described in §13 — the same source
+that configuration validation and the cover-page renderer read.
 
 ## 12. Output and Session Log
 
@@ -551,9 +689,15 @@ Exercise pages themselves carry only a title and minimal annotation. The
 
 ### The session log
 
-`session.json` records the seed, the configuration hash, and the full parameter
-dictionary for every exercise. It is the history the selector reads back. It is
-human-readable, git-committable, and hand-editable.
+`session.json` records the seed, the configuration hash, the full parameter
+dictionary for every exercise, and the **resolved weight inputs** that produced
+the draw (§9). It is the history the selector reads back. It is human-readable,
+git-committable, and hand-editable.
+
+The weight inputs are what make the file sufficient for exact replay rather than
+merely descriptive of the result. They also make a sheet auditable: the question
+"why did it pick D Dorian three days running?" is answerable from the file
+itself, without re-deriving anything.
 
 ## 13. Error Handling
 
@@ -570,6 +714,41 @@ generator becomes a wrong exercise on the page, which is worse than no exercise.
 | Session directory exists | **Refuse.** `--force` overwrites and must be asked for explicitly. |
 | Corrupt session-history entry | Hard error naming the file. Silently skipping a bad entry would degrade variety invisibly. |
 
+### The vocabulary registry
+
+"Naming the exact key and its accepted values" requires an enumerated set of
+accepted values to name. `vocabulary.py` (§4) is that set: for every axis in §7
+and §8, the canonical snake_case identifier and its human-readable display name.
+
+```python
+SCALE_TYPE = {
+    "ionian":            "Ionian",
+    "dorian":            "Dorian",
+    "major_pentatonic":  "major pentatonic",
+    ...
+}
+TRAVERSAL = {
+    "positional":            "positional",
+    "three_note_per_string": "three-notes-per-string",
+    ...
+}
+```
+
+One registry, three consumers, no drift:
+
+| Consumer | Use |
+|---|---|
+| `config.py` | Validate identifiers; on failure, name the key and list its accepted values verbatim from the registry. |
+| `families/`, `rhythm.py` | Dispatch on the canonical identifier. |
+| `session.py`, cover page (§12) | Render display names into the plain-language summary. |
+
+The display half is required regardless of the error contract: §12's cover page
+emits "D Dorian, three-notes-per-string, ascending thirds," which is precisely a
+rendering of these identifiers. Without a shared registry, configuration
+parsing, family dispatch, and the cover-page renderer each grow a private
+vocabulary and drift apart — and §13's promise to name accepted values silently
+becomes a promise the code cannot keep.
+
 ## 14. Testing Strategy
 
 The architecture was chosen partly for testability: almost nothing requires a
@@ -579,7 +758,8 @@ rendered PDF.
 |---|---|
 | `theory.py`, `instrument.py` | Exhaustive. All 12 roots against all ~28 scale types, verified against known interval content. Every pitch maps to valid positions on every profile. |
 | Families | Property-based over a wide parameter sweep. |
-| `rhythm.py` | Durations sum correctly; tuplet ratios well-formed. |
+| `rhythm.py` | **Sounding** durations (§6) of a voice sum to the pattern's cycle length; every written duration is a representable notehead; tuplet ratios well-formed. |
+| `vocabulary.py` | Every identifier used in §7, §8, and the §10 example config resolves; every axis value has a display name. |
 | `selection.py` | Statistical, deterministic under a fixed seed. |
 | `lilypond/emit.py` | Golden-file tests on the emitted `.ly` **text**. No rendering. |
 | `lilypond/render.py` | One integration test invoking LilyPond, asserting a multi-page PDF. |
@@ -602,6 +782,22 @@ complete cycle emitted.
 Simulate 200 sessions under a fixed seed; assert each axis distributes near
 uniformly and that no value recurs within the horizon more often than the
 weighting permits. This is the test that proves the clumping problem is solved.
+
+Two adjacent assertions guard the weighting function itself:
+
+- **No weight is ever zero.** Every computed weight is `>= FLOOR`, so the
+  total-weight-zero draw described in §9 cannot occur.
+- **The pathological pool terminates.** `shape = { scales = 3 }` over a
+  two-element `scale_types` pool selects successfully rather than dividing by
+  zero — the case the earlier three-rule formulation would have crashed on.
+
+### The replay test
+
+Generate a session; append several later sessions to the log; then `melete
+replay` the original date and assert the result is **byte-identical** to the
+first run. This is the test that proves §9's reproducibility guarantee holds
+against a log that has moved on, and it is the reason the weight inputs are
+recorded rather than recomputed.
 
 ## 15. Repository and Vergil Integration
 
@@ -709,6 +905,21 @@ worktree section in `CLAUDE.md`.
 | 11 | One combined `practice.pdf` per day | The printing unit is the day, not the exercise. |
 | 12 | Organization bootstrap folded into this epic | The org is empty; `.github` is a hard prerequisite for the epic model. This is a from-scratch bootstrap, and splitting it would add ceremony without clarity. |
 | 13 | Accept the unmaintained `lilypond` redistribution; fork it if needed | It is the only way to install LilyPond into a virtual environment, and it is open source with a thin packaging layer. If it breaks, fork and contribute back upstream rather than route around it. |
+
+### Resolutions from spec review
+
+Decisions 14–19 were recorded during the `paad:pushback` review of this
+specification on 2026-08-09, before implementation began. Each closed a gap that
+would have reached an implementer as an open question.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 14 | `session.json` is self-sufficient for replay; `replay` and `--seed` are separate operations | Selection reads the session log, which is not a function of the seed, so a seed alone cannot reproduce a day once the log has grown. Recording the weight inputs makes the guarantee literally true and the sheet auditable. |
+| 15 | One weighting expression with the floor applied last | The three-rule formulation contradicted itself at distances 0 and 1 and admitted an all-zero weight vector — an undefined draw on a legal config. One expression is monotonic, never zero, and keeps the policy locally tunable. |
+| 16 | `Note.duration` is the written value; `Tuplet.ratio` supplies the scaling | Sounding durations inside a tuplet are not representable as noteheads (a triplet eighth is 1/12). Written durations keep the emitter a pass-through and pin the contract at the `score.py` seam, where `rhythm.py` and `emit.py` would otherwise diverge. |
+| 17 | Bound exercise length with `max_notes` through the existing validity gate; accept the short final measure with `\bar "\|."` | Length varied roughly twentyfold across legal draws, making sheet size uncontrolled against a printability criterion. This is a bound, not a volume model — §17's deferral stands. |
+| 18 | State `fret_count` for every built-in profile | It determines specification validity, therefore the candidate pool, therefore the draw. Inferring it would make the same seed produce different sheets on different installations. |
+| 19 | One vocabulary registry for parameter identifiers and display names | §13's promise to name accepted values needs an enumerated set, and §12's cover page needs display names. Without one registry, config parsing, family dispatch, and the renderer drift apart. |
 
 ## 17. Deferred to v2
 
