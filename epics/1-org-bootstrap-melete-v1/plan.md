@@ -2062,3 +2062,43 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   archived under `docs/branding/`, and each loose file was byte-verified against
   its committed copy before removal. The melete design doc was left in place — it
   belongs in the `melete` repository, not here.
+
+- **B3's sketch listed 11 scale types where `theory` defines 27, and would have
+  failed its own drift-guard test.** The task sketch in this plan enumerated a
+  short list while §7 specifies roughly twenty-eight, so an implementer following
+  the sketch literally would have built a vocabulary registry that disagreed with
+  the theory module — the precise disagreement B3's drift guard exists to catch.
+  The implementing agent found it before writing the test. That is the drift
+  guard working exactly as intended, one level up from where it was aimed: the
+  guard was specified clearly enough that thinking about it exposed the error in
+  the document asking for it.
+
+- **B13's sketch asserted an error message that decision #23 had already
+  replaced.** It asserted `"uv sync" in str(exc.value)` for the missing-LilyPond
+  error. That predates #23, which removed melete's runtime Python dependency and
+  made LilyPond a binary on `PATH`; there is no `uv sync` remedy to suggest any
+  more, and the message now leads with the platform install commands. The
+  assertion moved with the decision rather than with the plan, which is the
+  general hazard of a plan that quotes implementation detail: the detail changes
+  under it silently.
+
+- **B5's sketch asserted a `chromatic` tempo of `(60, 80)`, which spec §7 no
+  longer specifies.** The family tempo defaults were revised upward — chromatic
+  to 60–120, scales and arpeggios to 80–140, intervals to 70–130 — because the
+  originals were reasoned from categories rather than from playing. The test
+  asserts the current default. §7 now also states that the defaults are a
+  starting point a user overrides, and that the durable answer is the measurement
+  layer §17 defers to v2.
+
+- **Tempo defaults are moving out of `config.py` and into the families.**
+  `config.py` held the per-family tempo defaults for one reason: when that code
+  was written, `families/` did not exist, so the defaults landed in the nearest
+  module that did. `families/` exists now, and §7 is explicit that the range is
+  supplied by the family, so ownership is moving there (`melete#35`). The general
+  shape is central configuration shedding knowledge that belongs to a component,
+  and it is expected to recur as the package fills in — anything written before
+  its owner exists lands somewhere it does not belong. The decision was to adapt
+  when the need is discovered rather than to predict where knowledge will need to
+  move: predicting produces empty modules and indirection for components that
+  never arrive, while moving a default once its owner exists is cheap and the
+  need announces itself.
