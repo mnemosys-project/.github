@@ -1944,6 +1944,47 @@ against.
 | §13 Error handling, vocabulary registry | B3, B11, B13, B14 |
 | §14 Testing strategy | every task's test steps |
 | §15 Repo and Vergil integration | A5 |
-| *Org banner and its design record* | A3 |
 | §15 Installation for daily use | C1 |
+| *Org banner and its design record* | A3 |
 | *Document formats* | A2 |
+
+## Evolution during execution
+
+Appended as the epic runs. This is the source for the retrospective's §1 —
+see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
+
+- **A3 inserted; the former A3 and A4 renumbered to A4 and A5.** Banner image
+  work produced in a separate session during bootstrap was sitting outside
+  version control in the parent directory, and had no task. Renumbering was done
+  immediately rather than deferred because no issues had yet been filed against
+  the two repo-creation tasks — their repositories do not exist, so they cannot
+  be filed — which made the change free then and expensive later.
+
+- **A3 was made to block A1.** The banner is the full-bleed image at the top of
+  `profile/README.md`, which is the file A1 creates. Landing the banner first let
+  A1 write that file once instead of writing it and amending it.
+
+- **A1's template paths were wrong in the plan.** The plan placed the org
+  templates under `.github/`. In an organization's `.github` repository the
+  org-wide templates live at the repository **root**; a `.github/ISSUE_TEMPLATE/`
+  there applies only to that repository and is inherited by nothing. Found by
+  reading `vergil-tooling`'s `2026-05-14-github-profile-repo-design.md`, which
+  is the canonical structure and which the plan should have cited from the
+  start.
+
+- **A1's planned `task.yml` had nothing to mirror.** The plan said the issue
+  templates would mirror the `task` and `idea` labels, but this org's registry
+  has no `task` label. The documented standard specifies a single `issue.yml`
+  plus `config.yml`, which is what was built.
+
+- **A1's discovery command was not runnable by an agent.** The plan prescribed
+  `vrg-gh api` to read the reference org's files; `gh api` is denied to the user
+  identity. Replaced with raw URL fetches and `vrg-gh search code`, and the plan
+  corrected so the next agent does not hit the same wall.
+
+- **A2 revealed that no skill writes the Evolution log.** The
+  `epic-retrospective` skill sources its §1 from a `plan.md` section named
+  "Evolution during execution", but no skill in the suite instructs anyone to
+  create one — the consumer exists without a producer. This section, and the
+  requirement in the org's document-format standard, close that loop locally.
+  This plan did not have the section until A2 added it.
