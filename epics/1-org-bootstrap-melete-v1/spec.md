@@ -267,6 +267,7 @@ class InstrumentProfile:
     name: str
     tuning: tuple[int, ...]   # absolute pitches, low to high
     fret_count: int
+    position_span: int = 4    # how much neck one hand covers (§7, §10)
 ```
 
 Built-in profiles:
@@ -291,6 +292,14 @@ A generated exercise specification is validated against the active profile. A
 specification requiring string indices or a fret range the profile cannot supply
 is invalid and is resampled — for example, a six-string-spanning skip pattern on
 `bass4`.
+
+`position_span` is a declared number for the same reason `fret_count` is, plus
+one of its own. How many frets fall under one hand follows from fret spacing,
+which is a fact about the instrument; and a bound the families themselves must
+respect has nowhere else to live, since a family is a pure `params -> Score`
+function handed nothing but its parameters and the profile. It carries a default
+rather than being required, because most instruments agree about it. §7 states
+what it means and §10 states how to override it.
 
 ## 6. The Score IR
 
@@ -456,6 +465,35 @@ the retry budget is the same loud error naming the over-constrained axis. This
 adds a bound, not a model — rolling volume and fatigue budgeting remain deferred
 to v2 per §17.
 
+### `positional` means a position
+
+`positional` is a traversal that makes a physical claim: every note of the
+exercise falls under one hand, with no shift. A specification whose content
+cannot fit within one position is therefore **invalid rather than
+approximated**. The family raises, naming the axes that could not all be
+satisfied, and §9's gate resamples the draw.
+
+The positional layout is chosen by minimizing total fret travel, and an argmin
+has no floor of its own. Two octaves of a pentatonic across three strings cannot
+fit under a hand on any tuning, so the minimization returns the least bad answer
+— and reporting that as success printed a cover page reading "G♭ major
+pentatonic, **positional**, ascending groups of 4" above notation demanding a
+fourteen-fret reach. That is worse than an unplayable exercise. An unplayable
+exercise announces itself at the first attempt; a mislabelled one does not,
+because the label is the part a student trusts, and it teaches the reader that
+this is what a position is.
+
+Refusing converts a silent mislabelling into an over-constrained specification,
+which §9 already knows how to resample. `range_octaves = 2` over a three-string
+set simply stops drawing as positional, which is correct: it is not a positional
+exercise.
+
+How much neck one hand covers is `position_span` on the instrument profile
+(§10). It lives there because fret spacing is what decides the reach, and
+because a bound a family must respect has nowhere else to live — a family is a
+pure `params -> Score` function and the profile is the only thing it is handed
+besides its parameters.
+
 ### The terminal measure
 
 Because §6 does not model measures, a cycle's sounding duration is generically
@@ -598,14 +636,27 @@ instead.
 ### Validity
 
 Validity is a hard gate, not a weight. Each sampled specification is checked
-against the active instrument profile **and against `max_notes`** (§7). Invalid
-specifications are resampled up to a bounded retry count; exhausting retries is a
-loud error naming the over-constrained axis, never a silent fallback.
+against the active instrument profile, **against `max_notes`** (§7) and
+**against `max_fret_span`** (§10). Invalid specifications are resampled up to a
+bounded retry count; exhausting retries is a loud error naming the
+over-constrained axis, never a silent fallback.
 
-Both checks run through the same gate. A cycle that is too long and a string set
-the profile cannot supply are the same kind of failure — a specification the
-instrument or the session cannot accommodate — and neither is ever quietly
-adjusted into something renderable.
+All three checks run through the same gate. A cycle that is too long, a string
+set the profile cannot supply and a reach no hand has are the same kind of
+failure — a specification the instrument or the session cannot accommodate — and
+none of them is ever quietly adjusted into something renderable. The fretboard
+is checked twice over deliberately: the family checks that a note is *on* the
+neck, and only the span bound checks that a player can get to it.
+
+**Hand span is a third predicate, not a new concept.** The gate was already the
+right shape. Decision #17 added `max_notes` through this same machinery for the
+same class of problem — a specification that is legal but not useful — so the
+reach bound reuses the resampling, the retry budget and the loud failure rather
+than standing up a second mechanism beside them.
+
+Span is measured between the **lowest and highest fretted** notes; open strings
+are excluded. That exclusion is a deliberate simplification with a known limit,
+recorded as provisional in decision #37 and stated in full under §10.
 
 **A high rejection rate is expected and is not a symptom of anything.** Because
 the axes are sampled independently, a draw routinely combines values that
@@ -626,6 +677,11 @@ handful: the bound was sized against this measurement rather than guessed. At
 valid draw in twenty — has roughly a 1-in-10¹¹ chance of failing spuriously,
 while a genuinely over-constrained pool is reported in milliseconds instead of
 being ground against.
+
+Those fractions were measured before the span bound existed, and a bound that
+rejects more draws could have invalidated the sizing. They were therefore
+re-measured rather than assumed when it was added, and the retry bound of 500
+stands on the lower fractions.
 
 ### Determinism
 
@@ -682,6 +738,7 @@ three have no pool section at all, and `scales` has one that never declares
 ```toml
 [instrument]
 profile = "bass6"                    # bass4 | bass5 | bass6, or explicit tuning
+position_span = 4                    # one hand position, as a span (section 7)
 
 [output]
 staves = "both"                      # both | tab | notation
@@ -691,6 +748,7 @@ key_signatures = true                # print the key signature (section 10a)
 count = 5
 horizon = 14
 max_notes = 96                       # per-exercise length bound (section 7)
+max_fret_span = 12                   # per-exercise reach bound (section 9)
 shape = { chromatic = 1, scales = 2, arpeggios = 1, intervals = 1 }
 
 [pool.chromatic]
@@ -759,6 +817,55 @@ family rejects, spending retries to no purpose.
 here overridden for two of the four families and left alone for the other two.
 `[pool.rhythm]` is a section of `[pool]` but not a family, so it carries axes
 and no tempo.
+
+### The two playability bounds
+
+Two keys bound what an exercise asks of the fretting hand, and both are stated
+as a **span**: the distance from the lowest fretted note to the highest.
+
+| Key | Default | What it bounds |
+|---|---|---|
+| `[instrument] position_span` | 4 | The width of one hand position (§7). |
+| `[session] max_fret_span` | 12 | The reach of any one exercise (§9). |
+
+`position_span` is four because four fingers cover four frets, and reaching one
+fret beyond them is ordinary technique rather than a stretch a player would
+notice. One hand position is therefore five frets, and the span between its
+outermost notes is four. It sits on the instrument rather than the session
+because fret spacing is what decides the reach: a short-scale instrument puts
+more frets under the same hand. It is written beside `profile` rather than
+inside an explicit tuning so that a player whose hand disagrees with the default
+does not have to write out a whole tuning to say so.
+
+`max_fret_span` is twelve because that is one octave of neck, and it is
+deliberately looser than a position: shifting is legitimate practice, not a
+defect to be bounded away. `chromatic` with `shift = fret_per_cycle` is
+*supposed* to climb — it tops out at nine frets under the example pool above —
+and it must keep drawing. What twelve refuses is an exercise that covers more of
+the neck than the neck's own repeating unit: every shape recurs an octave
+higher, so a span past twelve contains a repetition of itself.
+
+**Open strings are excluded from the span, and that rule is provisional**
+(decision #37). Fret 0 sounds while the fretting hand stays where it is, so an
+open string neither extends the reach nor pins it to the nut. Without the
+exclusion the open-A minor pentatonic box — the open A against frets 3, 5 and 7
+— is refused as a seven-fret stretch, when it is one of the most standard shapes
+on the instrument.
+
+The rule is blunt, and it is known to be blunt. It cannot distinguish an open
+string at the bottom of a low shape, where a three-note-per-string scale
+starting on an open string is one position and entirely reasonable, from an open
+string interleaved with a hand high on the neck — playable, since the fretting
+hand does not move, but a different kind of awkward that the bound is not
+measuring. It is accepted as a temporary simplification to get control of the
+span problem and produce sheets that read as intuitively correct, on the
+explicit understanding that it will be revisited once there is experience of how
+the exercises actually play. Tracked as `mnemosys-project/melete#60`.
+
+**Both numbers are a first pass.** A reach bound is the kind of thing that can
+only be tuned by generating sheets and looking at them, which is why it is
+configuration rather than a constant, and why this section states defaults
+rather than settled values.
 
 ### An axis the pool does not declare is an error, never a default
 
@@ -1551,6 +1658,20 @@ alternative is superficially attractive and was rejected on its merits.
 | # | Decision | Rationale |
 |---|---|---|
 | 34 | An axis a family reads but its `[pool.*]` section does not declare is a hard error naming the axis and the section; it is never defaulted | §13 already forbids falling back to a default for a *misspelled* key, and an *absent* one differs only in being easier to miss. `string_sets` is the axis that shows the fallback has no principled form: all 63 non-empty subsets of six strings is nonsense as a practice pool; contiguous-only invents a musical judgment the tool has no business making for the author; the full string set silently converts every positional exercise into a different one. Defaulting would fail in the mode this design consistently rejects — a plausible sheet the author did not ask for and cannot explain — and defaulting only the axes with an obvious guess would make the rule unpredictable. §10's example is corrected to declare every axis for the same reason: the example is what a reader copies. |
+
+### Resolutions from the first printed sheet
+
+Decisions 35–37 were recorded on 2026-08-10, after the first practice sheet was
+generated, rendered and read. Three of its five exercises asked for a reach no
+hand has, and one of those was labelled `positional`. Decision 37 is recorded as
+**provisional**: it is a simplification accepted knowingly, with a named limit
+and a tracked revisit, rather than a rule anyone believes is complete.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 35 | `positional` raises when the content cannot fit one position; bound the width of a position with `[instrument] position_span`, default 4 | The layout minimizes total fret travel and an argmin has no floor, so two octaves of a pentatonic across three strings returned the least bad answer and the family called it success — printing "G♭ major pentatonic, positional, ascending groups of 4" over a fourteen-fret reach. A mislabelled exercise is worse than an unplayable one, because the label is the part a student trusts. Four is the span between the outermost notes of one position: four fingers cover four frets and reaching one beyond is ordinary technique, so a position is five frets wide. It lives on the profile because fret spacing decides the reach, and because a `params -> Score` family is handed nothing else that could carry it. |
+| 36 | Bound the reach of every traversal with `[session] max_fret_span`, default 12, through §9's existing validity gate | Nothing checked that a hand could get to a note the fretboard contained, and the first sheet held spans of 15 and 17 frets that nothing had decided were acceptable. Decision #17 added `max_notes` through the same machinery for the same class of problem — a specification that is legal but not useful — so this is a third predicate rather than a new concept. Twelve is one octave of neck, looser than a position on purpose: deliberate shifting is legitimate, and chromatic with `shift = fret_per_cycle` spans nine under §10's pool and must keep drawing. Past twelve an exercise covers more than the neck's own repeating unit and contains a repetition of itself. |
+| 37 | **Provisional.** Span is measured between the lowest and highest *fretted* notes; open strings are excluded. Revisit tracked as `mnemosys-project/melete#60` | The justification is real: fret 0 sounds while the fretting hand stays put, and without the exclusion the open-A minor pentatonic box — open A against frets 3, 5 and 7 — is refused as a seven-fret stretch, when it is one of the most standard shapes on the instrument. But the rule is blunt and known to be blunt. It cannot distinguish an open string at the bottom of a low shape, where a three-note-per-string scale starting open is one position and entirely reasonable, from an open string interleaved with a hand high on the neck — playable, but a different kind of awkward the bound is not measuring. Accepted as a temporary simplification to get control of the span problem, to be revisited once there is experience of how the exercises play. Recorded so a future reader can tell this was a knowing simplification with a named limit, not a rule believed to be complete. |
 
 ## 17. Deferred to v2
 

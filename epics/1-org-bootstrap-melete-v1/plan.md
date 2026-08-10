@@ -2571,3 +2571,30 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   written and carries a pointer to this entry instead: the plan records what was
   intended, and editing it to match what shipped would erase the divergence this
   log exists to hold.
+
+- **The first rendered sheet was unplayable in three of its five exercises, and
+  the defect was invisible to 2,648 passing tests at 100% branch coverage.** The
+  validity gate checked that every note was *on* the fretboard; nothing checked
+  that a hand could get to it. Exercise 3 was printed as `positional` and
+  spanned fourteen frets, exercise 4 spanned fifteen and exercise 5 seventeen.
+  Two bounds close it — `[instrument] position_span` for the width of a position
+  and `[session] max_fret_span` for the reach of any exercise (decisions 35 and
+  36) — and the open-string rule they are measured under is recorded as
+  provisional with a named limit and a tracked revisit (decision 37,
+  `melete#60`).
+
+  How it was found is worth recording plainly, because it is an argument about
+  *when* validation happens rather than only about this bug. The commit before
+  the fix ran 2,648 tests at 100% branch coverage, all green, and not one of
+  them could have caught this: every test asserted a property the design had
+  already named — the pitch invariant, the string set, the note count — and
+  playability was not among them. Coverage measures which lines ran, not which
+  questions were asked. The defect surfaced the first time a sheet was
+  generated, printed and read by a player, which is the check the suite
+  structurally could not perform. A criterion like "playable" becomes testable
+  only after someone has looked at the output once; the phase C proof tasks are
+  where that looking is scheduled, and this is the first thing it returned.
+
+  The span bound rejects more draws than the profile checks alone, so B10's
+  retry-budget sizing was re-measured rather than assumed to still hold. It
+  stands at 500.
