@@ -849,6 +849,26 @@ Two adjacent assertions guard the weighting function itself:
   two-element `scale_types` pool selects successfully rather than dividing by
   zero — the case the earlier three-rule formulation would have crashed on.
 
+### Tests that need the binary
+
+Only two tests invoke LilyPond: the `lilypond/render.py` integration test and the
+`cli.py` end-to-end smoke test. Everything else — including `lilypond/emit.py`,
+which is golden-file tests on emitted **text** — is pure.
+
+That ratio is what makes the binary prerequisite tolerable: fifteen of the
+seventeen implementation tasks can be built and verified without LilyPond present
+at all. The two that cannot are exactly the tasks covering the rendering path,
+where a skipped test would be a hole rather than an inconvenience. They must
+therefore **fail loudly when the binary is absent rather than skip silently**, in
+any environment that claims to be running the full suite.
+
+### Coverage
+
+The validation pipeline enforces **100% test coverage**. This is not a target to
+approach but a gate that fails the build, and it applies from the first module
+onward. Any deliberate exclusion must be an explicit `# pragma: no cover` with a
+reason, not an untested branch left to accumulate.
+
 ### The replay test
 
 Generate a session; append several later sessions to the log; then `melete
@@ -899,31 +919,79 @@ against the Logical Minds Foundry repositories during bootstrap.
 
 ### Dependencies
 
-Runtime dependency is **`lilypond` and nothing else** — the PyPI redistribution
-of the LilyPond binary, installed into the project virtual environment by `uv`.
+**There are no runtime Python dependencies.** LilyPond is required, but as a
+**binary on `PATH`**, not as a package installed into the virtual environment.
 
-This is what allows the tool to run inside the standard Vergil `dev-python`
-container with **no change to the base image** and no host-level installation.
+> **Amended 2026-08-10.** This section previously specified the PyPI `lilypond`
+> redistribution as the sole runtime dependency, and claimed that this let the
+> tool run inside the standard `dev-python` container with no change to the base
+> image and no host-level installation. That is not achievable on this project's
+> hardware. The original text and the reasoning that replaced it are recorded in
+> decisions #13 and #23 rather than deleted.
 
-**On the redistribution's maintenance status:** the PyPI `lilypond` package is
-version 2.25.12, last published 2024-02-02, and is not actively tracking
-upstream. This is accepted rather than mitigated. It is the only viable option
-for installing LilyPond into a virtual environment, LilyPond's input syntax is
-highly stable, and this version renders correctly.
+#### Why the redistribution cannot be a dependency
 
-If the package proves inadequate, the response is to **fork it and contribute
-back** — it is open source, the packaging layer around the binary is thin, and
-the author has the Python expertise to stand behind upstream submissions. An
-apparently unmaintained dependency of this shape is an opportunity, not a
-liability.
+The PyPI `lilypond` package publishes **x86_64 wheels only**, across all sixteen
+releases from 2.24.1 to 2.25.12:
 
-Containment remains cheap regardless: `lilypond/render.py` is the only module
-aware of the binary, so migrating to a fork, a container-level system
-installation, or a newer redistribution is a single-file change.
+```text
+lilypond-2.25.12-0-py3-none-macosx_10_15_x86_64.whl
+lilypond-2.25.12-0-py3-none-manylinux2014_x86_64.whl
+lilypond-2.25.12-0-py3-none-win_amd64.whl
+```
 
-The development dependency group follows the Vergil Python standard: pytest,
-ruff, mypy. Python 3.14, uv-managed. Development occurs inside
-`vrg-container-run` against `dev-python`.
+There has never been an aarch64 build. The dev container is arm64 Debian 13 and
+the development host is Apple Silicon, so `uv sync` fails on both — not as a
+degraded experience, but outright.
+
+Forking does not rescue this. Upstream publishes `darwin-arm64` from 2.27.0
+onward but **no `linux-arm64` binary at any version**, so a fork could repackage
+for macOS while the container would still need a source build.
+
+#### Where the binary comes from
+
+| Platform | Source |
+|---|---|
+| Debian / Ubuntu | `apt-get install lilypond` — trixie ships **2.24.4** for arm64 in `main` |
+| macOS | Homebrew, or the upstream `darwin-arm64` tarball (2.27.0+) |
+| x86_64, any | the PyPI redistribution, via the opt-in `bundled-lilypond` extra |
+
+A note on versions: LilyPond follows the GNU even/odd convention, so **2.24.4 is
+a stable release and 2.25.12 is a development snapshot**. The original pin was
+therefore to a development build of an unmaintained repackage — a worse position
+than this section previously described, independent of architecture.
+
+#### What this costs, stated plainly
+
+The withdrawn claim was a real benefit, not decoration. Obtaining LilyPond is now
+an **environment prerequisite** that a user must satisfy before melete works, and
+the dev container needs a system package that the shared `dev-python` image does
+not and should not carry. Vergil has no mechanism for repo-specific system
+dependencies today; the design problem is filed as
+[`vergil-project/vergil-tooling#2718`](https://github.com/vergil-project/vergil-tooling/issues/2718),
+and publishing our own aarch64 wheels — which would restore the original
+property — is [`mnemosys-project/melete#21`](https://github.com/mnemosys-project/melete/issues/21).
+
+#### Containment held
+
+This amendment changed one line of `pyproject.toml` and no application code,
+because `lilypond/render.py` is the only module aware that a binary exists (§4).
+Decision #5 bought that isolation on the argument that the renderer might have to
+change; the renderer did not change, its *provenance* did, and the boundary
+absorbed it anyway. §13's requirement that a missing binary produce an explicit
+resolution rather than a stack trace is now the primary user-facing contract for
+this dependency.
+
+#### Development toolchain
+
+Python 3.14, uv-managed. Development occurs inside `vrg-container-run` against
+`dev-python`.
+
+The dev dependency group is a **contract with `vrg-validate`**, not a preference:
+the typecheck stage runs **`ty` and `mypy`**, and the audit stage runs
+**`pip-audit` and `pip-licenses`**. Omitting any of them fails the stage with a
+`FileNotFoundError` rather than a useful message. With pytest and ruff that is
+six tools, not the three this section previously listed.
 
 ### Installation for daily use
 
@@ -932,10 +1000,17 @@ premise is one command each morning, and requiring a container to run it would
 put a wrapper between the author and a thirty-second task.
 
 Melete is therefore installed as a standalone tool on the host — `uv tool
-install` from the repository — and run directly. The `lilypond` redistribution
-comes with it into the tool's own environment, which is precisely why the
-one-dependency constraint in this section matters: there is nothing else to
-install.
+install` from the repository — and run directly.
+
+**LilyPond must be installed on the host separately**, since it is a binary
+prerequisite rather than a bundled dependency. On Apple Silicon that is Homebrew
+or the upstream `darwin-arm64` tarball. This is a genuine regression against the
+original design, which intended `uv tool install` to be sufficient on its own;
+see the amendment above and `melete#21`.
+
+Because the prerequisite is invisible until something fails, §13's requirement
+stands as the safeguard: a missing binary produces an explicit message naming the
+resolution, never a stack trace.
 
 Installing and confirming that first successful run is a deployment step
 distinct from merging the code, and is tracked as such in the plan.
@@ -977,7 +1052,7 @@ worktree section in `CLAUDE.md`.
 | 10 | Instructional prose on a cover page, not on the exercises | Text overlaid on engraved notation clutters the page and competes with the notes. |
 | 11 | One combined `practice.pdf` per day | The printing unit is the day, not the exercise. |
 | 12 | Organization bootstrap folded into this epic | The org is empty; `.github` is a hard prerequisite for the epic model. This is a from-scratch bootstrap, and splitting it would add ceremony without clarity. |
-| 13 | Accept the unmaintained `lilypond` redistribution; fork it if needed | It is the only way to install LilyPond into a virtual environment, and it is open source with a thin packaging layer. If it breaks, fork and contribute back upstream rather than route around it. |
+| 13 | ~~Accept the unmaintained `lilypond` redistribution; fork it if needed~~ **Superseded by #23.** | Original reasoning: it is the only way to install LilyPond into a virtual environment, and it is open source with a thin packaging layer. This assumed the risk was staleness. The actual defect was that the package has no aarch64 wheel at any version, which forking cannot fix for Linux because upstream publishes no `linux-arm64` binary either. |
 
 ### Resolutions from spec review
 
@@ -1004,6 +1079,17 @@ specification against `plan.md` on 2026-08-09.
 | 20 | Tempo is a per-family default, overridable in config; never a sampled axis | `Score.tempo_range` had no producer anywhere — not an axis, not a config key — while §12's cover page prints a tempo per exercise. Sampling it would introduce difficulty variation, which is progressive overload and belongs to v2. |
 | 21 | `ExerciseSpec` and `WeightInputs` live in `selection.py`, upstream of the families | §4's pipeline named `ExerciseSpec` but no module owned it. Placing it in `score.py` would blur the family/emitter seam; families keep the `params -> Score` contract of §7 and stay ignorant of the selector. |
 | 22 | An explicit tuning that is not strictly ascending is a load error, never re-sorted | Index 0 is the lowest string and every family depends on the ordering. Sorting a malformed tuning would shift every string index and engrave the wrong instrument convincingly — the silent-failure mode §13 exists to prevent. |
+
+### Resolutions from implementation
+
+Decisions 23–25 were forced by contact with the work rather than by review, and
+are recorded here so the reversals are legible.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 23 | LilyPond is a binary on `PATH`; melete has no runtime Python dependencies. **Supersedes #13.** | The PyPI redistribution has no aarch64 wheel at any version, so `uv sync` fails on both the arm64 container and the Apple Silicon host. Forking cannot fix Linux, since upstream publishes no `linux-arm64` binary. Taking the binary from the system works on both platforms today and cost one line, because `render.py` already isolated it. |
+| 24 | Withdraw the "no change to the base image" claim, and treat the container gap as a Vergil-wide design problem rather than a melete workaround | A repo-specific system package is something Vergil's container model has never had to express — every image is generic and repo-agnostic. Solving it privately inside melete would hide a problem that the next such repository will hit. Filed as `vergil-tooling#2718`. |
+| 25 | The dev dependency group is a contract with `vrg-validate`, not a style choice | Typecheck runs `ty` **and** `mypy`; audit runs `pip-audit` **and** `pip-licenses`. A missing tool fails the stage with `FileNotFoundError`, so the list is discovered by running the pipeline, not by preference. |
 
 ## 17. Deferred to v2
 
