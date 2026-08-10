@@ -2013,6 +2013,24 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   `vergil-tooling#2718` for the fact that Vergil has no way to express a
   repo-specific system dependency.
 
+- **`integration-tests` was turned off, and this is not a quiet reduction in
+  testing.** melete was created with `--integration-tests`, which made the
+  repository unmergeable: the flag adds `test / integration / 3.14` to the
+  branch ruleset's required checks, but the generated workflow never emits that
+  context, so the first PR blocked with nineteen of nineteen checks green. The
+  two tests §14 specifies still exist and still run locally; what was switched
+  off is CI's claim to run a suite it has no way to run — even with the context
+  emitted, they would fail on the missing binary. Two preconditions gate turning
+  it back on: `vergil-tooling#2720` for the propagation defect and
+  `vergil-tooling#2718` for the container. `vergil-tooling#2721` records the
+  underlying gap, which is that integration tests are not a first-class Vergil
+  feature at all — they exist in one grandfathered project. Tracked as
+  `melete#23`.
+
+  Worth noting how this was found: the tooling's own `vrg-github-repo-config
+  audit` reported the repository **compliant** throughout, because it does not
+  evaluate rulesets. The audit that exists to catch this pointed away from it.
+
 - **The dev toolchain was discovered by running the pipeline, not from the
   spec.** §15 listed pytest, ruff and mypy. `vrg-validate` actually requires
   `ty` *and* `mypy` for typecheck and `pip-audit` *and* `pip-licenses` for
