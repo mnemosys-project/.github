@@ -1968,6 +1968,30 @@ against.
 
 ## Evolution during execution
 
+- **Decision #9 was reverted, and the reversal changed the shape of the system
+  rather than a setting.** The emitter spelled every note from an all-flats
+  table, so F♯ Dorian engraved as G♭ A♭ B𝄫 C♭ D♭ E𝄫 F♭ — a different key, with
+  the tablature staying correct and disagreeing silently. The cause was not a
+  wrong notation choice but a missing layer: a 12-TET integer cannot carry a
+  spelling, and "notate in C with explicit accidentals" turned that gap into a
+  policy.
+
+  What makes this worth recording is that #9's *reasoning* survived. Wanting
+  modal material not to assert a tonal centre was sound; it was implemented by
+  breaking correctness. Separating the two — whether to print a signature, and
+  how to spell a note — turned one wrong setting into two right ones, and #9 is
+  recorded as half-right rather than wrong.
+
+  The spelling model is §10a and decisions 27–30. It was designed rather than
+  patched because the instructor review that will revise tiers 2 and 3 is
+  expected, not hypothetical — so the policy sits behind one entry point, on the
+  same reasoning §9 already applies to the selection weighting.
+
+  **Sequencing consequence:** `theory` and `score` take the change before B7 and
+  B8 are built, so the arpeggios and intervals families set `key` from the start.
+  Building them first would have meant retrofitting four families instead of
+  two.
+
 Appended as the epic runs. This is the source for the retrospective's §1 —
 see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
 

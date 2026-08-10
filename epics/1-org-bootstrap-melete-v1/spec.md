@@ -19,6 +19,7 @@
 - [8. Rhythm Modifier](#8-rhythm-modifier)
 - [9. Coverage-Aware Selection](#9-coverage-aware-selection)
 - [10. Configuration](#10-configuration)
+- [10a. Accidental Spelling](#10a-accidental-spelling)
 - [11. Command-Line Interface](#11-command-line-interface)
 - [12. Output and Session Log](#12-output-and-session-log)
 - [13. Error Handling](#13-error-handling)
@@ -653,7 +654,7 @@ profile = "bass6"                    # bass4 | bass5 | bass6, or explicit tuning
 
 [output]
 staves = "both"                      # both | tab | notation
-key_signatures = false               # explicit accidentals throughout
+key_signatures = true                # print the key signature (section 10a)
 
 [session]
 count = 5
@@ -693,10 +694,29 @@ wrong instrument. `fret_count` is required, for the reasons in §5.
 
 ### Notation conventions
 
-**No key signatures by default.** Modal exercises are notated in C with explicit
-accidentals throughout. A key signature implies a tonal center that modal
-practice material should not assert, and explicit accidentals force the reader to
-see each altered tone. Configurable via `key_signatures`.
+**Key signatures on by default**, and notes spelled correctly for the key. See
+§10a for the spelling model.
+
+> **Amended 2026-08-10, superseding decision #9.** This section previously read
+> "no key signatures by default; modal exercises are notated in C with explicit
+> accidentals throughout." That was not a notation choice — it was a missing
+> layer wearing one. See §10a and decision #27.
+
+`key_signatures` remains configurable, and now selects between two settings that
+are both correct:
+
+| Setting | Behavior |
+|---|---|
+| `true` *(default)* | Print the key signature — `\key fis \dorian` — and spell diatonically. Fewest accidentals; matches published practice material. |
+| `false` | Print **no** signature, but still spell correctly: F♯ G♯ A B C♯ D♯ E, with an explicit accidental on every altered tone. |
+
+The `false` setting is decision #9's original intent, finally implemented
+properly: no asserted tonal center, every altered tone visible to the reader,
+and F♯ spelled F♯. What it is *not* is the old behavior, which asserted no tonal
+center by spelling the notes wrongly.
+
+The default is `true` because that is what published practice material looks
+like, and because the primary reader of the notation staff is an instructor.
 
 **Staff mode is a switch.** `both` (default), `tab`, or `notation`.
 
@@ -705,6 +725,120 @@ stems and beams by default, assuming a notation staff above supplies the rhythm.
 In `tab` mode the emitter must therefore **explicitly enable rhythm display** —
 Guitar Pro-style tablature with stems — or the exercise is unreadable. In `both`
 mode plain tablature is correct. This is a branch in the emitter, not a flag.
+
+## 10a. Accidental Spelling
+
+### The defect this section exists to fix
+
+`Note.pitch` is a 12-TET integer. In twelve-tone equal temperament F♯ and G♭ are
+the same number, so an integer **cannot** carry a spelling. `theory.PITCH_CLASSES`
+is an all-flats table, and the emitter derived every note name from it.
+
+F♯ Dorian therefore engraved as **G♭ A♭ B𝄫 C♭ D♭ E𝄫 F♭**. That is not an awkward
+rendering of F♯ Dorian; it is a different key, and an absurd one. Tablature was
+unaffected — the fret numbers were right — so the two staves disagreed silently,
+which is the worst form the failure could take.
+
+The fix is not a better table. It is the layer that was missing: **spelling is a
+function of the key, and the key was never represented.**
+
+### Key
+
+```python
+@dataclass(frozen=True)
+class Key:
+    tonic: int        # pitch class, 0-11
+    scale_type: str   # identifier from theory.SCALES
+```
+
+`Score` gains `key: Key | None`. Families set it — they already hold `root` and
+`scale_type`. `None` is a real value, not an omission: it means the exercise has
+no key, which is true of everything the `chromatic` family produces.
+
+**The tonic's letter is derived, never stored.** Pitch class 6 is F♯ or G♭
+depending on the key: F♯ Dorian is the notes of E major, four sharps; G♭ Dorian
+is the notes of F♭ major, eight flats. The rule is to spell the tonic whichever
+way yields the signature with **fewer accidentals**, rejecting any spelling that
+requires a double accidental in the signature. F♯ Dorian beats G♭ Dorian 4 to 8;
+D♭ major beats C♯ major 5 to 7.
+
+Keeping the tonic an integer means `root` stays an integer in the families, the
+configuration and the selector. Only one derivation ever asks about letters.
+
+### Three tiers
+
+**Tier 1 — the seven diatonic modes.** Seven degrees, seven letters, each used
+exactly once. Fully determined by the tonic letter and the interval pattern; no
+judgment involved. Emits `\key <tonic> <mode>`.
+
+**Tier 2 — scales with a parent.** Melodic and harmonic minor and their modes
+still have seven degrees, so the letter rule still holds. The pentatonics and
+blues are subsets of a seven-note parent and are spelled as that parent spells
+them — so the blue note is a ♭5.
+
+The signature is the **parent's**: major for major pentatonic; natural minor for
+minor pentatonic, blues, and the melodic and harmonic minor families. Everything
+outside the signature prints an accidental, which is exactly how melodic and
+harmonic minor are conventionally written — the raised sixth and seventh appear
+as accidentals against the natural-minor signature.
+
+**Tier 3 — symmetric and keyless.** Whole-tone, both diminished scales, and
+anything from the `chromatic` family. No signature. Spelled **by direction**:
+ascending intervals take sharps, descending take flats.
+
+Letters necessarily skip or repeat here, and that is accepted rather than worked
+around: six notes cannot occupy seven letters, and eight cannot avoid repeating
+one. A symmetric scale has no parent to inherit from, so direction is the only
+signal available.
+
+### Arpeggios
+
+Chords are spelled by **function** — root, third, fifth and seventh take the
+letters of degrees 1, 3, 5 and 7 — which is its own rule, not the scale rule.
+
+Rather than give `Key` a second form, each chord quality maps to an **implied
+parent scale**, and the tiers above do the rest:
+
+| Quality | Implied parent | Tier |
+|---|---|---|
+| `maj`, `maj6`, `maj7` | ionian | 1 |
+| `min`, `min6`, `min7`, `min_maj7` | aeolian | 1 |
+| `dom7` | mixolydian | 1 |
+| `m7b5` | locrian | 1 |
+| `dim`, `dim7` | diminished | 3 |
+| `aug` | whole-tone | 3 |
+
+Chord tones then fall out as a subset of the parent's spelling, one mechanism
+serves both scales and chords, and the arpeggios family sets `Key` exactly like
+the others.
+
+### Where spelling lives
+
+`theory` owns it. That module already owns modes, intervals and chord content,
+and spelling is the same kind of knowledge.
+
+`theory.spell()` returns a **notation-neutral** `SpelledPitch` of letter,
+alteration and octave. `lilypond/emit.py` asks for that and only knows how to
+write it down; LilyPond's mode keywords stay in the LilyPond package. §4's
+boundary therefore holds — the emitter still never learns what a Dorian mode is,
+and it stops carrying a hardcoded pitch-name table, which is an improvement on
+what it had.
+
+Tablature never consults any of this. A spelling change must leave the tab staff
+byte-identical, and §14 asserts it.
+
+### Why the policy sits behind one entry point
+
+Tier 1 is fully determined. **Tier 2 is conventional practice and tier 3 is a
+defensible convention rather than a rule** — and both will be reviewed by a
+reader with formal training once real sheets exist. Blue-note spelling, the
+diminished scales, and whether modal material should carry a signature at all
+are exactly the questions that will come back with corrections.
+
+So the three tiers live in one module behind one entry point, for the same
+reason §9 requires it of the selection weighting: the revision we are expecting
+should be a small local change, not a refactor. A policy scattered across four
+family modules would not survive its first review.
 
 ## 11. Command-Line Interface
 
@@ -891,6 +1025,38 @@ approach but a gate that fails the build, and it applies from the first module
 onward. Any deliberate exclusion must be an explicit `# pragma: no cover` with a
 reason, not an untested branch left to accumulate.
 
+### Spelling
+
+The assertion that matters most is the direct analogue of the central invariant,
+and it is checked for every note of every generated exercise alongside it:
+
+```
+spelled pitch class == note.pitch % 12
+```
+
+A spelling that does not sound the note it names is the failure mode, and it is
+precisely the bug §10a exists to fix.
+
+Alongside it:
+
+- **The letter rule** — tier 1 and the seven-note tier 2 scales use seven
+  distinct letters. Tier 3 is explicitly exempt, and the exemption is asserted
+  rather than assumed.
+- **Exhaustive sweep** — all 12 tonics against all 27 scale types: spelling
+  succeeds, pitch classes round-trip, and no key signature contains a double
+  accidental.
+- **Tonic choice** — F♯ beats G♭ for Dorian; D♭ beats C♯ for major.
+- **Known keys** — F♯ Dorian is `F♯ G♯ A B C♯ D♯ E`; plus C blues, C whole-tone,
+  C diminished and D♭ major.
+- **A named regression test** for the original defect: F♯ Dorian must never
+  produce G♭, B𝄫 or C♭.
+- **Tablature is byte-identical** before and after the spelling change. This is
+  a cheap proof of a boundary the design claims, and the claim is worth
+  proving rather than asserting.
+
+None of this needs LilyPond. Spelling is testable as pure data, which is why
+`SpelledPitch` is notation-neutral.
+
 ### The replay test
 
 Generate a session; append several later sessions to the log; then `melete
@@ -1070,7 +1236,7 @@ worktree section in `CLAUDE.md`.
 | 6 | Session log, no progression model | Variety now, progression later. The log is the substrate progression plugs into and is required anyway to save each day's sheets. |
 | 7 | Coverage-aware per-axis sampling | Uniform random clumps. Independent per-axis recency weighting is what makes variety feel varied. |
 | 8 | Instrument profiles configurable from v1 | MNEMOSYS principle: exercises are abstract, instruments are configurations. Nearly free if designed in, expensive to retrofit. |
-| 9 | No key signatures by default | Modal exercises should not imply a tonal center; explicit accidentals force the reader to see each altered tone. |
+| 9 | ~~No key signatures by default~~ **Half-right; superseded by #27.** | Original reasoning: modal exercises should not imply a tonal center, and explicit accidentals force the reader to see each altered tone. The reasoning about *signatures* was sound and survives as `key_signatures = false`. What was wrong was the implementation: it conflated whether to print a signature with how to spell a note, and "notate in C with explicit accidentals" spelled F♯ Dorian as G♭ A♭ B𝄫 C♭ D♭ E𝄫 F♭ — a different key, not a neutral one. |
 | 10 | Instructional prose on a cover page, not on the exercises | Text overlaid on engraved notation clutters the page and competes with the notes. |
 | 11 | One combined `practice.pdf` per day | The printing unit is the day, not the exercise. |
 | 12 | Organization bootstrap folded into this epic | The org is empty; `.github` is a hard prerequisite for the epic model. This is a from-scratch bootstrap, and splitting it would add ceremony without clarity. |
@@ -1114,6 +1280,19 @@ the specification asked for — are legible.
 | 24 | Withdraw the "no change to the base image" claim, and treat the container gap as a Vergil-wide design problem rather than a melete workaround | A repo-specific system package is something Vergil's container model has never had to express — every image is generic and repo-agnostic. Solving it privately inside melete would hide a problem that the next such repository will hit. Filed as `vergil-tooling#2718`. |
 | 25 | The dev dependency group is a contract with `vrg-validate`, not a style choice | Typecheck runs `ty` **and** `mypy`; audit runs `pip-audit` **and** `pip-licenses`. A missing tool fails the stage with `FileNotFoundError`, so the list is discovered by running the pipeline, not by preference. |
 | 26 | `score.py` enforces §6's one-level-nesting rule at runtime: a `Tuplet` rejects any element that is not a `Note`, a `Score` rejects any voice element that is not a `Note` or a `Tuplet`, both raising `TypeError` naming the offending index | §6 states the rule but nothing checked it, and static typing does not close the gap: annotations are erased before any family runs, and families assemble voices dynamically from sampled parameters. A list built by appending in a loop is exactly where a type error slips past mypy. Without the check the failure surfaces as an `AttributeError` inside `emit.py` — far from its cause, in the module §4 keeps deliberately thin. The check is beyond what §6 specifies and was accepted deliberately rather than trimmed back to the letter of the spec. |
+
+### Resolutions from the spelling review
+
+Decisions 27–30 come from the 2026-08-10 brainstorm that reverted decision #9.
+The trigger was a bug; the outcome is a model, because the bug turned out to be
+a missing layer rather than a wrong setting.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 27 | Key signatures on by default, and notes spelled for the key. **Supersedes #9.** | A 12-TET integer cannot distinguish F♯ from G♭, so "notate in C with explicit accidentals" was never a neutral choice — it engraved F♯ Dorian as G♭ A♭ B𝄫 C♭ D♭ E𝄫 F♭, a different key, while the tablature stayed correct and disagreed silently. #9 conflated whether to print a signature with how to spell a note; separating the two makes both settings correct. |
+| 28 | Three spelling tiers — diatonic, parented, symmetric — behind one entry point in `theory` | The 27 scale types do not admit a single rule: LilyPond has no key signature beyond the modes, and six-note and eight-note scales cannot use each letter exactly once. Tier 1 is determined; tiers 2 and 3 are convention and will be revised after instructor review, so the policy is structured to make that revision a single-function change — the same requirement §9 places on the selection weighting. |
+| 29 | The tonic's letter is derived by fewest accidentals, never stored | Keeps `root` an integer in the families, the configuration and the selector, so exactly one derivation ever asks about letters. F♯ Dorian is four sharps and G♭ Dorian is eight flats; choosing the smaller signature gets it right without a spelling parameter that could be set wrong. |
+| 30 | Chord qualities map to an implied parent scale rather than `Key` gaining a chord form | Chords are spelled by function, which is its own rule — but mapping `maj7` to ionian, `m7b5` to locrian and so on makes chord tones a subset of the parent's spelling. One mechanism serves scales and chords, and the arpeggios family sets `Key` exactly like the others. |
 
 ## 17. Deferred to v2
 
