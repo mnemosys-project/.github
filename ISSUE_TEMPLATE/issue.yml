@@ -1,0 +1,71 @@
+name: Issue
+description: Track work with explicit acceptance criteria.
+body:
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue type
+      options:
+        - feature
+        - bug
+        - documentation
+        - refactor
+        - chore
+        - research
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Goal
+      description: >-
+        What is broken, missing, or needed? Include context and motivation —
+        why this matters, not only what it is.
+      placeholder: Describe the problem or the desired outcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        What does "done" look like? List the conditions that must be true when
+        this is complete. One sentence is fine for a trivial change. Leave this
+        blank only if you tick the box below.
+      placeholder: List the conditions that must be true when this is complete.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acceptance_obvious
+    attributes:
+      label: Acceptance criteria are obvious
+      description: >-
+        Tick this only if "done" is genuinely self-evident from the problem
+        statement. If it is ambiguous, write the criteria out instead — an
+        ambiguous issue needs explicit confirmation before work can start.
+      options:
+        - label: The criteria are intuitively obvious and need no elaboration
+          required: false
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation / evidence
+      description: >-
+        How will this be proven? Name the command, test, or observation that
+        demonstrates the criteria are met. "vrg-validate passes" is a valid
+        answer when the pipeline genuinely covers the change.
+      placeholder: The command to run, the test that must pass, or what to look at.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: >-
+        **Note:** issues under an epic are normally created with
+        `vrg-issue-create --epic <owner>/<repo>#N`, which establishes a native
+        sub-issue link. Use this form for standalone intake; never hand-roll a
+        sub-issue relationship.

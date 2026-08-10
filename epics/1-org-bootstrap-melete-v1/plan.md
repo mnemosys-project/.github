@@ -116,10 +116,20 @@ melete were abandoned, the org would be correctly formed.
 - Create: `CODE_OF_CONDUCT.md`
 - Create: `SECURITY.md`
 - Create: `SUPPORT.md`
-- Create: `.github/pull_request_template.md`
-- Create: `.github/ISSUE_TEMPLATE/config.yml`
-- Create: `.github/ISSUE_TEMPLATE/task.yml`
-- Create: `.github/ISSUE_TEMPLATE/idea.yml`
+- Create: `pull_request_template.md` (repository **root**)
+- Create: `ISSUE_TEMPLATE/config.yml` (repository **root**)
+- Create: `ISSUE_TEMPLATE/issue.yml` (repository **root**)
+
+**Path correction, found during implementation.** In an organization's `.github`
+repository the org-wide templates live at the repository **root** —
+`ISSUE_TEMPLATE/` and `pull_request_template.md` — not under `.github/`. A
+`.github/ISSUE_TEMPLATE/` directory here would apply only to this repository and
+would not be inherited by any other. The canonical structure is in
+`vergil-tooling/docs/specs/2026-05-14-github-profile-repo-design.md`.
+
+There is also no `task` label in this org's registry, so the originally planned
+`task.yml` had nothing to mirror. The documented standard specifies a single
+form, `issue.yml`, plus `config.yml`.
 
 **Interfaces:**
 - Consumes: nothing.
@@ -129,17 +139,31 @@ melete were abandoned, the org would be correctly formed.
 **Reference:** model on `vergil-project/.github`, which has all of these. Read
 them first — do not invent structure.
 
-- [ ] **Step 1: Read the reference org's equivalents**
+- [ ] **Step 1: Read the documented standard, then the reference org**
 
-```bash
-vrg-gh api repos/vergil-project/.github/contents/profile/README.md \
-  --jq '.content' | base64 -d
-vrg-gh api repos/vergil-project/.github/contents/CONTRIBUTING.md \
-  --jq '.content' | base64 -d
+The standard comes first — this is not a from-scratch design:
+
+- `vergil-tooling/docs/site/docs/standards/github-issues.md` — required issue
+  form fields and `blank_issues_enabled: false`.
+- `vergil-tooling/docs/specs/2026-05-14-github-profile-repo-design.md` — the
+  canonical `.github` profile repository structure and the template-inheritance
+  rule.
+
+**`vrg-gh api` is denied to the user identity**, so fetch these as raw URLs
+(all these repositories are public) rather than through the API:
+
+```text
+https://raw.githubusercontent.com/vergil-project/vergil-tooling/develop/<path>
+https://raw.githubusercontent.com/vergil-project/.github/develop/<path>
 ```
 
-Note structure and tone. Do not copy Vergil-specific policy verbatim — this org
-has different tooling expectations.
+Note the default branch is `develop`, not `main`. `vrg-gh search code --owner
+<org> "<term>"` is available and is the way to locate a file whose path you do
+not already know.
+
+Do not copy Vergil-specific policy verbatim — this org has different tooling
+expectations, and in particular does **not** use the `<username>-agent` identity
+model, which was uninstalled during bootstrap as stale.
 
 - [ ] **Step 2: Write `profile/README.md`**
 
@@ -156,8 +180,18 @@ the worktree convention. `SECURITY.md` gives a reporting address.
 
 - [ ] **Step 4: Write the issue and PR templates**
 
-`config.yml` disables blank issues and links to the epic model.
-`task.yml` and `idea.yml` mirror the `task` and `idea` labels in the registry.
+`ISSUE_TEMPLATE/config.yml` sets `blank_issues_enabled: false` and carries
+contact links to `NAMING.md` and `SUPPORT.md`.
+
+`ISSUE_TEMPLATE/issue.yml` implements the four fields the standard requires:
+issue type, problem/goal, acceptance criteria **with an explicit "criteria are
+obvious" option**, and validation/evidence. Note that `vergil-project/.github`'s
+own form carries only three of these and omits the obvious-criteria option and
+the validation field — follow the written standard, not that drift.
+
+`pull_request_template.md` is not a form. Pull requests here are built by
+`vrg-submit-pr`, so the template's job is to stop someone hand-writing one and
+to tell an outside contributor what to include instead.
 
 - [ ] **Step 5: Validate**
 
