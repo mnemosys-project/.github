@@ -802,7 +802,9 @@ parent scale**, and the tiers above do the rest:
 | Quality | Implied parent | Tier |
 |---|---|---|
 | `maj`, `maj6`, `maj7` | ionian | 1 |
-| `min`, `min6`, `min7`, `min_maj7` | aeolian | 1 |
+| `min`, `min7` | aeolian | 1 |
+| `min6` | dorian | 1 |
+| `min_maj7` | melodic_minor | 2 |
 | `dom7` | mixolydian | 1 |
 | `m7b5` | locrian | 1 |
 | `dim`, `dim7` | diminished | 3 |
@@ -811,6 +813,45 @@ parent scale**, and the tiers above do the rest:
 Chord tones then fall out as a subset of the parent's spelling, one mechanism
 serves both scales and chords, and the arpeggios family sets `Key` exactly like
 the others.
+
+**Every quality must map to a parent that contains all of its chord tones.**
+That is the property the table has to satisfy, and it is not a nicety of the
+mapping but the condition under which the mapping means anything. Subset
+spelling names a chord tone by the degree it matches; a tone the parent does
+not contain has no degree to take its letter and falls to the out-of-scale
+path instead. §14 asserts containment for every quality across all 12 roots.
+
+An earlier version of this table mapped both `min6` and `min_maj7` to aeolian,
+and aeolian contains neither chord's characteristic tone: the added sixth is 9
+semitones and the major seventh is 11, while aeolian has 8 and 10. Through
+aeolian, F♯ min6 spelled `F# A C# Eb` and F♯ min_maj7 spelled `F# A C# F` —
+wrong letters in both cases. Dorian contains the natural sixth and melodic
+minor contains the major seventh, so each chord now has a parent that names all
+four of its tones. This was caught during implementation by checking whether
+the model actually held rather than by transcribing the table, which is why the
+containment assertion in §14 exists: the property was always the requirement,
+and nothing had been asked to enforce it.
+
+### The fully diminished seventh is a known limit
+
+`dim` and `dim7` stay in tier 3 and are therefore spelled by direction rather
+than by a parent. C dim7 spells `C D# F# A`, not the functional `C Eb Gb Bbb`.
+
+This cannot be fixed by remapping the parent. A fully diminished seventh needs
+a **doubly diminished seventh** above the root, and no seven-note scale
+supplies one — there is no parent to point at, so the containment property
+above cannot be satisfied for this quality at all. Spelling it functionally
+would require degree-aware chord spelling: the speller would have to know that
+a given pitch is *the seventh of this chord* and name it accordingly.
+`spell(key, pitches)` deliberately does not carry that. It receives bare
+pitches and infers function from pitch-class membership in the parent, and that
+is exactly what lets one mechanism serve both scales and chords.
+
+So this is a structural limit of the model as designed, not a defect scheduled
+for repair. The design chose the narrower contract and the single spelling
+path, and this is what that choice costs. It is recorded here, next to the
+tiers, so a reader meets it as a stated boundary rather than discovering it in
+an engraved sheet.
 
 ### Where spelling lives
 
@@ -832,8 +873,11 @@ byte-identical, and §14 asserts it.
 Tier 1 is fully determined. **Tier 2 is conventional practice and tier 3 is a
 defensible convention rather than a rule** — and both will be reviewed by a
 reader with formal training once real sheets exist. Blue-note spelling, the
-diminished scales, and whether modal material should carry a signature at all
-are exactly the questions that will come back with corrections.
+fully diminished seventh above, the diminished scales, and whether modal
+material should carry a signature at all are exactly the questions that will
+come back with corrections. `C D# F# A` will read as wrong to an instructor,
+and the honest answer is that it is the cost of the contract rather than an
+oversight — recorded here so the review starts from that answer.
 
 So the three tiers live in one module behind one entry point, for the same
 reason §9 requires it of the selection weighting: the revision we are expecting
@@ -1042,6 +1086,11 @@ Alongside it:
 - **The letter rule** — tier 1 and the seven-note tier 2 scales use seven
   distinct letters. Tier 3 is explicitly exempt, and the exemption is asserted
   rather than assumed.
+- **Chord-tone containment** — every chord quality's tones are a subset of its
+  implied parent's pitch classes, asserted for all 12 roots. This is the
+  invariant §10a's table has to satisfy, and it is the test that would have
+  caught `min6` and `min_maj7` mapped to a parent that does not contain them.
+  `dim` and `dim7` are the stated exception, exempt for the reason §10a gives.
 - **Exhaustive sweep** — all 12 tonics against all 27 scale types: spelling
   succeeds, pitch classes round-trip, and no key signature contains a double
   accidental.
@@ -1293,6 +1342,18 @@ a missing layer rather than a wrong setting.
 | 28 | Three spelling tiers — diatonic, parented, symmetric — behind one entry point in `theory` | The 27 scale types do not admit a single rule: LilyPond has no key signature beyond the modes, and six-note and eight-note scales cannot use each letter exactly once. Tier 1 is determined; tiers 2 and 3 are convention and will be revised after instructor review, so the policy is structured to make that revision a single-function change — the same requirement §9 places on the selection weighting. |
 | 29 | The tonic's letter is derived by fewest accidentals, never stored | Keeps `root` an integer in the families, the configuration and the selector, so exactly one derivation ever asks about letters. F♯ Dorian is four sharps and G♭ Dorian is eight flats; choosing the smaller signature gets it right without a spelling parameter that could be set wrong. |
 | 30 | Chord qualities map to an implied parent scale rather than `Key` gaining a chord form | Chords are spelled by function, which is its own rule — but mapping `maj7` to ionian, `m7b5` to locrian and so on makes chord tones a subset of the parent's spelling. One mechanism serves scales and chords, and the arpeggios family sets `Key` exactly like the others. |
+
+### Resolutions from the arpeggio table correction
+
+Decision 31 was recorded on 2026-08-10, after S1 found §10a's implied-parent
+table mapping `min6` and `min_maj7` to a parent that does not contain them. The
+table correction itself is not a decision — the table was simply wrong, and it
+is corrected in place — but the limit the correction exposed is one, because it
+is a boundary the design accepts rather than a repair it defers.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 31 | Accept the fully diminished seventh's tier-3 spelling as a structural limit; do not add degree-aware chord spelling to correct it | `dim` and `dim7` are spelled by direction, so C dim7 spells `C D# F# A` rather than the functional `C Eb Gb Bbb`. Remapping cannot fix it: the chord needs a doubly diminished seventh and no seven-note scale supplies one, so no parent contains it. The functional spelling requires the speller to know that a pitch is *the seventh of this chord*, and `spell(key, pitches)` takes bare pitches and infers function from pitch-class membership — the narrow contract that lets one mechanism serve both scales and chords. Flagged for instructor review alongside the blue note. |
 
 ## 17. Deferred to v2
 
