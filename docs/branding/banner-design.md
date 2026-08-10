@@ -211,10 +211,11 @@ speech, the attested ancient Greek intelligent machines.
 They are the smallest figures in the frame. They are servants. Not one of them
 is a Muse, and not one touches an instrument.
 
-That placement is the whole statement, and it is precise: **AI conceived,
-designed, and built this project, and AI is not in the product.** Melete embeds
-no model and calls no inference endpoint. The automata build and maintain the
-stage; the Muses make the music.
+That placement is the whole statement, and it is precise: **Engineers and
+musicians conceived and direct this project, AI builds it under their
+direction — engineering-led, not AI-led — and AI is not in the product.**
+Melete embeds no model and calls no inference endpoint. The automata build and
+maintain the stage; the Muses make the music.
 
 Choosing Hephaestus's automata over a modern robot also keeps the image clear
 of VERGIL and MIMIR, whose banners are *about* AI. Mnemosys is not. Here the
