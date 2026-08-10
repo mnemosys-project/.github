@@ -1987,6 +1987,12 @@ def parent_scale(scale_type: str) -> str | None:
     return _PARENTS.get(scale_type)
 ```
 
+**Superseded during implementation — do not copy the `IMPLIED_PARENT` sketch
+above.** It maps `min6` and `min_maj7` to aeolian, which contains neither
+chord's characteristic tone. The shipped mapping is `min6` → `dorian` and
+`min_maj7` → `melodic_minor`. Spec §10a carries the corrected table; the
+Evolution during execution log records why the sketch is left standing.
+
 - [ ] **Step 4: Run and confirm pass**
 
 - [ ] **Step 5: Write the failing tests for the letter rule and tonic choice**
@@ -2546,3 +2552,22 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   move: predicting produces empty modules and indirection for components that
   never arrive, while moving a default once its owner exists is cheap and the
   need announces itself.
+
+- **S1's sketch mapped `min6` and `min_maj7` to aeolian, and so did the spec
+  table it was written from.** Both documents said aeolian; the implementing
+  agent shipped dorian and melodic_minor anyway, because it tested whether the
+  model held rather than transcribing what it was handed. §10a's rule is that
+  chord tones fall out as a subset of the parent's spelling, and aeolian
+  contains neither characteristic tone — the added sixth is 9 semitones and the
+  major seventh is 11, while aeolian has 8 and 10. Through aeolian, F♯ min6
+  spells `F# A C# Eb` and F♯ min_maj7 spells `F# A C# F`: wrong letters in both.
+  Dorian contains the natural sixth and melodic minor the major seventh, so the
+  corrected mapping is `min6` → `dorian` and `min_maj7` → `melodic_minor`.
+
+  Containment was always the requirement and nothing had been asked to enforce
+  it, which is why §14 now asserts it for every quality across all 12 roots — an
+  error two documents agreed on is caught by a test of the property, not by
+  another reading. The spec table was corrected under #27. The sketch is left as
+  written and carries a pointer to this entry instead: the plan records what was
+  intended, and editing it to match what shipped would erase the divergence this
+  log exists to hold.
