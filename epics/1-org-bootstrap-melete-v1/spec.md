@@ -607,6 +607,26 @@ the profile cannot supply are the same kind of failure — a specification the
 instrument or the session cannot accommodate — and neither is ever quietly
 adjusted into something renderable.
 
+**A high rejection rate is expected and is not a symptom of anything.** Because
+the axes are sampled independently, a draw routinely combines values that
+contradict each other, and nothing in the draw coordinates them:
+`three_note_per_string` is realizable only when the degree count is exactly
+three times the string count, and `traversal` and `string_set` are drawn without
+consulting one another. Measured over 20,000 draws per family from a broad pool
+on `bass6`, the realizable fraction is 27.8% for `scales`, 34.7% for
+`chromatic`, 57.9% for `arpeggios` and 71.3% for `intervals`. A legitimate pool
+that pins `three_note_per_string` falls to 11.2%, and a `string_skip` of 2 over
+a three-string set is unrealizable outright, at 0%.
+
+None of that is a defect. The gate rejects and redraws, so an unrealizable
+combination costs attempts rather than correctness, and no rejected draw ever
+reaches the page. It is, however, why the retry bound is 500 rather than a
+handful: the bound was sized against this measurement rather than guessed. At
+500 attempts a pool half as good as the worst legitimate one measured — one
+valid draw in twenty — has roughly a 1-in-10¹¹ chance of failing spuriously,
+while a genuinely over-constrained pool is reported in milliseconds instead of
+being ground against.
+
 ### Determinism
 
 The seed derives from the date plus a hash of the configuration and is written
@@ -648,6 +668,17 @@ author intends to tune this empirically through daily use.
 
 A single TOML file. The `[pool.*]` sections are the primary tuning surface.
 
+**The configuration below is complete and working, and is meant to be copied
+and run as it stands.** Every axis of every family its `shape` names is
+declared, because §9 samples every axis its family reads and an axis the pool
+does not declare is an error rather than a default (below). That makes the
+example longer than a fragment would be, and the length is the honest picture of
+what this tool asks for. An earlier version of this section declared the same
+four-family shape over a single `[pool.scales]` section, which is not a shorter
+configuration but a broken one. All four families raise on their first draw:
+three have no pool section at all, and `scales` has one that never declares
+`string_set` or `direction`.
+
 ```toml
 [instrument]
 profile = "bass6"                    # bass4 | bass5 | bass6, or explicit tuning
@@ -662,19 +693,93 @@ horizon = 14
 max_notes = 96                       # per-exercise length bound (section 7)
 shape = { chromatic = 1, scales = 2, arpeggios = 1, intervals = 1 }
 
+[pool.chromatic]
+permutations = "all"                 # all 24 orderings of the four fingers
+start_strings = [0, 1, 2, 3]
+start_frets = [1, 3, 5, 7]
+directions = "all"
+string_traversals = ["adjacent", "skip_1"]
+shifts = ["none", "fret_per_cycle"]
+spans = [3, 4]
+tempo = [60, 84]                     # overrides the family default (section 7)
+
 [pool.scales]
 roots = "all"
 scale_types = ["ionian", "dorian", "phrygian", "major_pentatonic", "blues"]
-patterns = ["straight", "thirds", "groups_of_3", "groups_of_4"]
 traversals = ["positional", "three_note_per_string"]
+string_sets = [[0, 1, 2, 3, 4, 5], [0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]]
+patterns = ["straight", "thirds", "groups_of_3", "groups_of_4"]
 octaves = [1, 2]
-tempo = [80, 100]                    # overrides the family default (section 7)
+directions = "all"
+tempo = [80, 100]
+
+[pool.arpeggios]
+roots = "all"
+qualities = ["maj7", "min7", "dom7", "m7b5", "min6"]
+inversions = ["root", "first", "second"]
+traversals = ["positional", "across_strings"]
+string_sets = [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5]]
+patterns = ["straight", "broken", "sweep_ordered"]
+octaves = [1, 2]
+directions = "all"
+
+[pool.intervals]
+intervals = [3, 4, 5, 6]             # 2nd through 10th (section 7)
+contexts = "all"                     # chromatic | diatonic
+roots = "all"
+scale_types = ["ionian", "dorian", "aeolian"]
+string_skips = [0, 1]
+string_sets = [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5], [0, 1, 2, 3, 4, 5]]
+directions = ["up", "down"]
+patterns = ["ascending_pairs", "descending_pairs", "alternating"]
 
 [pool.rhythm]
 subdivisions = ["eighth", "triplet_eighth", "sixteenth"]
+time_signatures = ["4_4", "3_4"]
 accent_patterns = ["none", "every_3"]
 note_value_patterns = ["straight", "long_short"]
 ```
+
+Three conventions in that file are worth naming.
+
+`"all"` expands an axis to every value it accepts, and is written wherever the
+shorthand is honest — `roots`, `permutations`, `directions`, `contexts`.
+`string_sets` has no `"all"` and never will: its accepted values are not an
+enumeration but a structural rule, since every non-empty subset of six strings
+is sixty-three values and an error message listing them is not one anybody could
+read. Its candidates are therefore always written out, low string to high.
+
+Where a family realizes only part of an axis's registry, the values are listed
+rather than expanded. `traversals` and `patterns` are single axes shared across
+families — `across_strings` is an arpeggio traversal and `three_note_per_string`
+is a scale one — so `"all"` on either would fill the pool with combinations the
+family rejects, spending retries to no purpose.
+
+`tempo` is not a sampled axis (decision #20). It is a per-family default, shown
+here overridden for two of the four families and left alone for the other two.
+`[pool.rhythm]` is a section of `[pool]` but not a family, so it carries axes
+and no tempo.
+
+### An axis the pool does not declare is an error, never a default
+
+An axis a family reads but its `[pool.*]` section does not declare is a **loud
+error at the first draw from that pool, naming both the axis and the section**.
+Nothing is defaulted, nothing is inferred from the axes that were declared, and
+the failure lands before anything is engraved.
+
+This is §13's stance applied to an absent key rather than to a misspelled one,
+and the argument is the same one: a candidate pool the configuration did not
+write produces a sheet the author did not ask for and cannot account for.
+
+The alternative is superficially attractive, because most axes look like they
+have an obvious fallback. `string_sets` is the axis that shows they do not. All
+63 non-empty subsets of six strings is nonsense as a practice pool. Restricting
+the default to contiguous subsets invents a musical judgment — that string
+skipping is exceptional — which the tool has no business making on the author's
+behalf. Defaulting to the full string set silently converts every positional
+exercise into a different exercise. There is no defensible choice among those,
+so the tool declines to make one, and it declines uniformly rather than
+defaulting the easy axes and erroring on the hard one.
 
 ### Explicit tunings
 
@@ -807,8 +912,13 @@ parent scale**, and the tiers above do the rest:
 | `min_maj7` | melodic_minor | 2 |
 | `dom7` | mixolydian | 1 |
 | `m7b5` | locrian | 1 |
-| `dim`, `dim7` | diminished | 3 |
-| `aug` | whole-tone | 3 |
+| `dim`, `dim7` | diminished_whole_half | 3 |
+| `aug` | whole_tone | 3 |
+
+The parent column names scale identifiers, not prose: these are the keys of the
+scale registry, and the table is read as written. "Diminished" on its own would
+not be — there are two diminished scales, and tier 3 above refers to both — so
+`dim` and `dim7` name `diminished_whole_half` exactly.
 
 Chord tones then fall out as a subset of the parent's spelling, one mechanism
 serves both scales and chords, and the arpeggios family sets `Key` exactly like
@@ -1025,6 +1135,7 @@ generator becomes a wrong exercise on the page, which is worse than no exercise.
 | Failure | Behavior |
 |---|---|
 | Malformed or invalid configuration | Fail at load, naming the exact key and its accepted values. Never fall back to a default for a misspelled key. |
+| Axis a family reads that its `[pool.*]` section does not declare | Hard error at the first draw from that pool, naming both the axis and the section to declare it under. Never defaulted — an absent key gets the same treatment as a misspelled one, for the reasons in §10. |
 | Explicit tuning not strictly ascending | Fail at load, naming the offending index. Never re-sort — sorting would shift every string index and engrave the wrong instrument convincingly. |
 | Pool over-constrained | Hard error naming the axis that could not be satisfied — for example, "no valid `string_set` for `bass4` with `octaves = 3`". |
 | Family emits a note outside the fretboard | A bug, not user error. Raise. |
@@ -1428,6 +1539,18 @@ review starts from the reasoning instead of rediscovering them.
 |---|---|---|
 | 32 | Leave `dim` in tier 3 alongside `dim7`; do not remap `IMPLIED_PARENT["dim"]` to locrian | `A dim` therefore spells `A C D#` rather than the functional `A C Eb`. Unlike `dim7` this one is fixable — locrian contains both the ♭3 and the ♭5, names all three chord tones, and would satisfy the containment property — so the alternative is recorded as declined rather than absent. Remapping moves the quality between tiers and splits `dim` from `dim7`, which cannot follow it, and the judgment was to see how the raised fourth reads on an engraved sheet before changing the model to avoid it. Flagged for instructor review. |
 | 33 | The tablature staff spells keylessly in both staff modes; accept the two staves naming one pitch differently in the source | `emit.py` passes `key=None` for the tab staff, so in a flat key the notation staff writes `ges` where the tab writes `fis`. A fret is a function of pitch and F♯ and G♭ are the same pitch, so a change of key cannot move a fret; feeding the tab the key's spelling would make its source vary with a change that cannot affect its content, which is what §14's byte-identical tablature assertion forbids. LilyPond derives identical frets from both spellings, so the cost is confined to a reader of the raw `.ly` — accepted rather than paid for with a coupling the boundary rules out. |
+
+### Resolutions from the selector meeting the configuration
+
+Decision 34 was recorded on 2026-08-10, when the implemented selector was run
+against §10's own example configuration and raised on the first draw. The
+example's incompleteness is corrected in place rather than recorded — it was
+simply wrong — but the rule that exposed it is a decision, because the
+alternative is superficially attractive and was rejected on its merits.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 34 | An axis a family reads but its `[pool.*]` section does not declare is a hard error naming the axis and the section; it is never defaulted | §13 already forbids falling back to a default for a *misspelled* key, and an *absent* one differs only in being easier to miss. `string_sets` is the axis that shows the fallback has no principled form: all 63 non-empty subsets of six strings is nonsense as a practice pool; contiguous-only invents a musical judgment the tool has no business making for the author; the full string set silently converts every positional exercise into a different one. Defaulting would fail in the mode this design consistently rejects — a plausible sheet the author did not ask for and cannot explain — and defaulting only the axes with an obvious guess would make the rule unpredictable. §10's example is corrected to declare every axis for the same reason: the example is what a reader copies. |
 
 ## 17. Deferred to v2
 
