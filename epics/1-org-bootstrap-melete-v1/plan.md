@@ -2045,3 +2045,20 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   create one — the consumer exists without a producer. This section, and the
   requirement in the org's document-format standard, close that loop locally.
   This plan did not have the section until A2 added it.
+
+- **A1's README was rewritten after the fact — it led with the myth and never
+  said what the project is.** The README A1 delivered opened with the naming
+  scheme, explained the Boeotian triad, and listed the tools, but a reader
+  reached the bottom without learning the project is about learning to play
+  music. `mnemosys-core`'s frozen `Philosophy.md` had already ruled against
+  myth-first framing — "myth suggests inspiration, talent, and divine gift,"
+  whereas the domain is "discipline, decay, maintenance, recall under fatigue" —
+  so the original README inverted a decision already on record. Rewritten
+  musicians-first: the retention problem and the practice→memory→repertoire loop
+  lead, an honest Status section states what `melete` does **not** do yet, and
+  the naming triad is kept but demoted below the explanation. Filed and landed as
+  issue #15. The same change closed out the bootstrap by clearing the workspace
+  parent's scratch directory: every banner prompt and generation was already
+  archived under `docs/branding/`, and each loose file was byte-verified against
+  its committed copy before removal. The melete design doc was left in place — it
+  belongs in the `melete` repository, not here.
