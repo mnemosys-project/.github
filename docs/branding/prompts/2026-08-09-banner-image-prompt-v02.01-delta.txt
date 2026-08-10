@@ -1,0 +1,88 @@
+MNEMOSYS PROJECT — ORG BANNER IMAGE
+v02.01 DELTA PROMPT — two narrow edits to v02.
+
+USE THIS IN THE SAME ChatGPT CONVERSATION THAT PRODUCED v02, immediately after
+that image. Paste everything below the line.
+
+Deliberately narrow. The v01.02 run established that this generator damages
+whatever a delta does not explicitly protect, so the preservation list at the
+end is as load-bearing as the two changes themselves. Keep v02 — if this run
+drifts the two women or the framing, v02 is the better image and we revert.
+
+Rationale and full assessment: 2026-08-09-banner-image-design.md §16
+
+────────────────────────────────────────────────────────────────────────
+
+Keep the previous image almost entirely as it is. Change only the two things
+described below. Everything else — every figure, the camera position, the
+lighting, the weather, the colour, the architecture and all text — must stay
+exactly as it is.
+
+1. REPLACE THE WINGED CHERUBS WITH MECHANICAL BRONZE AUTOMATA.
+
+   The small bronze figures at the left and right edges are currently winged
+   cherubs. They are wrong. Replace them with mechanical automata.
+
+   THEY MUST HAVE NO WINGS. Not feathered wings, not metal wings, no wings of
+   any kind. They are not cherubs, angels, putti, or children.
+
+   They are machines, and must plainly look like machines: bronze bodies built
+   from riveted and overlapping plates, visible articulated joints at the
+   shoulder, elbow, knee and knuckle, exposed hinges and pins, hands with
+   segmented mechanical fingers, and smooth featureless faces or plain bronze
+   masks with no human expression. Think of an ancient Greek clockwork
+   servant, forged rather than born.
+
+   There must be exactly THREE of them, and each must stand no more than half
+   the height of the two women.
+
+   Move them forward out of the corners and onto the wet stone stage floor,
+   where the warm amber light from the amplifiers catches their polished
+   bronze. Each one is working: the first coils a heavy cable, the second
+   holds a sheet of music up to the light, the third adjusts a microphone
+   stand.
+
+   None of them stands on a plinth, touches an instrument, wears a laurel
+   wreath, or resembles either of the two women in any way. They are clearly
+   servants and stagehands.
+
+2. RESTORE TWO MISSING INSTRUMENTS.
+
+   Two instruments have become unrecognisable and must be rendered clearly, on
+   stands among the others along the amplifier wall:
+
+   - An AULOS: a matched pair of slender dark reed pipes, angled apart in a V
+     from a single double mouthpiece, mounted upright on a stand.
+   - A HURDY-GURDY: a wooden stringed instrument with a lute-shaped body, a
+     wooden crank handle projecting from the tail end, and a small boxed row
+     of wooden keys along the side of the neck.
+
+   Both show green verdigris on their metal fittings, consistent with the
+   other untouched instruments.
+
+CHANGE NOTHING ELSE. Specifically, all of the following must survive exactly
+as they appear now:
+
+   - The two women: their faces, their living rain-soaked skin, their damp
+     hair, their poses, their expressions, their size and their positions on
+     their plinths. Do not make them larger, smaller, paler, or more like
+     statues. They are the best thing in the image.
+   - The camera position and the framing. Do not zoom in or pull back.
+   - The colossal seated bronze statue and the water falling from her hands.
+   - The ruins climbing the mountainside, the storm, the shafts of light, and
+     the falling rain.
+   - The hanging signboard, its wrought-iron bracket, and its two lines of
+     text.
+   - Every carved and lettered word, spelled exactly as it is now: MNEME,
+     MELETE, AOEDE, MNEMOSYS, PRACTICE BECOMES MEMORY, MEMORY BECOMES SONG.
+   - The blackletter lettering style and the Pegasus relief on the amplifier
+     wall.
+   - The amplifier wall, its amber pilot lights, and the cables running across
+     the wet stone floor.
+   - Every other instrument, including the kithara, the Flying V guitar, the
+     electric bass, the theremin and the drum kit, in its current position and
+     with its current green patina.
+   - The colour palette: oxidized green and deep teal, with amber the only
+     warm light.
+
+   Add no new text.

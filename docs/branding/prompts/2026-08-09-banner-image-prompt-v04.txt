@@ -1,0 +1,203 @@
+MNEMOSYS PROJECT — ORG BANNER IMAGE
+v04 FROM-SCRATCH PROMPT — for a fresh ChatGPT session.
+
+Identical to the v03 prompt except for two things, so that the drapery is
+effectively the only variable:
+
+  1. A new COSTUME section. v03 rendered both chitons sheer and clinging, with
+     a thigh-high slit on Aoede. Wet drapery is a legitimate classical
+     tradition, but this dials it back toward v02's restraint.
+  2. The automata count line is reinforced. v03 asked for three and delivered
+     two — this is not a new request, just a firmer statement of one that was
+     already there and went unmet.
+
+Run from scratch rather than as a delta on v03: v03 is the first version with
+all four inscriptions legible, and every delta attempted in this project has
+cost something it was not pointed at, four times out of four.
+
+Inherited from v03, which folds in every lesson from four generations:
+  - the two women's aliveness gets its own headed paragraph (this worked in v02)
+  - the material rule is stated twice, once as rule and once as an enumerated
+    list of surfaces (stating it once as principle failed in v01)
+  - every quantity is capped explicitly (told merely to be "visible", the
+    generator multiplied the automata from two to six in v01.02)
+  - the automata are mechanical and wingless by explicit negation (unprompted,
+    the model defaults small bronze attendants on a classical stage to putti)
+  - the automata are held clear of both plinths (in v02.02 one knelt in front
+    of MELETE's carved name and hid it)
+  - the three instruments that keep failing to render — aulos, hurdy-gurdy,
+    theremin — are described physically rather than named
+
+Paste everything below the line.
+
+Full generation log: 2026-08-09-banner-image-design.md §16
+
+────────────────────────────────────────────────────────────────────────
+
+Create a single ultra-wide cinematic banner image, aspect ratio 2.5:1.
+
+STYLE AND LIGHT
+Photorealistic, richly detailed cinematic render. Lit like a Gustave Doré
+engraving translated into film: deep storm chiaroscuro, one dramatic backlight
+source breaking through cloud behind the central figure, heavy rain-charged
+atmosphere with visible falling rain and wet reflective stone. Serious and
+monumental, never whimsical.
+
+SETTING
+Night on the slope of Mount Helicon under a breaking storm. The location is at
+once an ancient Greek sanctuary and a concert stage — the same structure
+serving both purposes, not one decorating the other. Ruined temples,
+colonnades and broken terraces climb the mountainside into the dark behind the
+stage. Weathered stone columns frame the extreme left and right edges of the
+image.
+
+REAR CENTRE — MNEME
+A colossal bronze cult statue of a seated woman wearing a laurel crown, deeply
+oxidized to green verdigris, scaled so large she reads as architecture rather
+than as a person. She holds no instrument and is not performing. Water pours
+continuously from her cupped hands, falls in a bright cascade down the rock
+beneath her, and runs into a stone basin at stage level. A break in the storm
+clouds backlights her with shafts of pale light.
+Her name is carved in weathered Roman capitals into the rock directly beneath
+her: MNEME
+
+THE STAGE
+A long stage built from a wall of stacked amplifier cabinets, their grille
+cloth reading as weathered stone, their corners shod in bronze, stacked like
+ashlar masonry. Warm amber pilot lights glow along the amplifier panels. A
+winged horse — Pegasus — is carved in high relief into the centre face of the
+cabinet wall. Thick cables run across the wet stone stage floor like vines and
+roots.
+
+STAGE LEFT — MELETE
+A living young woman standing on a stone plinth, caught mid-practice and in
+motion. She wears a chiton with a broad studded leather belt and a laurel
+wreath. She is working, not performing: brow furrowed in concentration, eyes
+down, lips parted as she counts a beat under her breath.
+In front of her a music stand holds a printed sheet showing both five-line
+staff notation and six-line tablature. On the flat top of the amplifier
+cabinet beside her, at waist height and in clear view, sit a mechanical
+pyramid metronome in bright polished bronze and a shallow wooden writing
+tablet filled with dark wax, its surface scratched with rows of notation, a
+bright bronze stylus lying across it.
+Her name is carved in Roman capitals into the front face of her plinth:
+MELETE
+
+STAGE RIGHT — AOEDE
+A living young woman mirrored to Melete at exactly the same scale, the same
+eye level, and the same prominence, on an identical stone plinth. She is
+singing — head back, mouth open, mid-note. She holds nothing; one hand is
+raised above her in the mano cornuta, index and little fingers extended.
+Behind her stand tall racks of rolled scrolls and handwritten set lists, and a
+second music stand.
+Her name is carved in Roman capitals into the front face of her plinth:
+AOEDE
+
+THE TWO WOMEN ARE ALIVE — THIS IS THE MOST IMPORTANT THING IN THE IMAGE
+Melete and Aoede must be unmistakably living human beings, not statues and not
+marble: warm skin with real colour in the face, throat and hands, flushed with
+effort, hair soaked and clinging from the rain, water running on their arms,
+sweat and rain catching the amber light. The colossal seated figure behind
+them is the only statue among the three, and the contrast between her
+weathered metal and their living skin must be immediate and obvious.
+They must also read as equals: identical size, identical height, symmetrically
+balanced to left and right of the colossus, and both large and prominent in
+the frame.
+
+COSTUME — RESTRAINED AND PRACTICAL
+Both women wear a full-length Doric chiton of heavy, opaque woven linen in
+undyed cream and pale ochre, pinned at both shoulders, layered, and belted at
+the waist with a broad studded leather cincture. The garment falls straight to
+the ankles and covers the shoulders, chest, midriff and legs completely.
+
+The cloth is thick and matte. Even soaked through it stays opaque and hangs in
+heavy folds — it does not cling to the body, does not turn sheer or
+translucent, and does not reveal the form beneath. There are no slits, no
+cutaways, no bare midriff, and no exposed thighs.
+
+They are working musicians dressed for a long night's labour in bad weather,
+not performers dressed to be looked at. The rain reads on their faces, hair,
+throats, arms and hands — that is where the wetness shows, not in the fabric.
+
+INSTRUMENTS — SEVEN, SPANNING 2,500 YEARS, NONE HELD BY ANYONE
+Standing on stands along the amplifier wall, evenly spread, with no single
+instrument favoured. Render each one clearly and recognisably:
+
+  - A KITHARA: an ancient Greek lyre with a broad wooden soundbox and two
+    curved arms joined by a crossbar, strings running vertically.
+  - An AULOS: a matched pair of slender dark reed pipes, angled apart in a V
+    from a single double mouthpiece, mounted upright on a stand.
+  - A HURDY-GURDY: a wooden stringed instrument with a lute-shaped body, a
+    wooden crank handle projecting from the tail end, and a small boxed row of
+    wooden keys along the side of the neck.
+  - A FLYING V ELECTRIC GUITAR, its body a sharp symmetrical V.
+  - An ELECTRIC BASS GUITAR with a long neck and four strings.
+  - A THEREMIN: a small wooden box on a stand with a straight vertical metal
+    antenna rising from one end and a horizontal loop antenna projecting from
+    the side.
+  - A DRUM KIT with bronze shells and cymbals.
+
+Place the kithara and the Flying V side by side so their silhouettes echo one
+another.
+
+CENTRE STAGE — THREE MECHANICAL BRONZE AUTOMATA
+There must be three mechanical automata — three, not two and not four —
+standing evenly spaced on the open wet stone floor at the centre of the stage
+between the two plinths, where the warm amber light from the amplifiers
+catches their polished bronze.
+
+They are machines and must plainly look like machines: bronze bodies built
+from riveted and overlapping plates, visible articulated joints at shoulder,
+elbow, knee and knuckle, exposed hinges and pins, hands with segmented
+mechanical fingers, and smooth featureless faces with no human expression.
+
+THEY HAVE NO WINGS OF ANY KIND. They are not cherubs, angels, putti, or
+children. Each stands no more than half the height of the two women.
+
+Each is working: the first coils a heavy cable, the second holds a sheet of
+music up to the light, the third adjusts a microphone stand. None stands on a
+plinth, touches an instrument, wears a laurel wreath, or resembles either
+woman. They are unmistakably servants and stagehands.
+
+KEEP THEM CLEAR OF BOTH PLINTHS. No automaton may stand in front of, lean
+against, or overlap either stone plinth, and none may block the carved names
+or the metronome and wax tablet.
+
+MATERIAL RULE — APPLY THIS VISIBLY
+Bronze is bright where it is handled every day, and green where it is
+neglected.
+Bright polished bronze: the three automata, the metronome, the stylus, the
+guitar and bass fretboards worn clean by fingers, and the rim of the spring
+basin.
+Deep green verdigris patina: the colossal statue, the architecture, the
+amplifier fittings, the drum shells, and the metal parts of every instrument
+standing untouched on its stand.
+
+TEXT — RENDER CLEANLY, SPELL EXACTLY, AND LEAVE EVERY WORD FULLY VISIBLE AND
+UNOBSTRUCTED
+  - MNEME — Roman capitals carved into the rock beneath the colossus
+  - MELETE — Roman capitals carved into the front face of the left plinth
+  - AOEDE — Roman capitals carved into the front face of the right plinth
+  - MNEMOSYS — heavy blackletter across the centre of the amplifier wall,
+    positioned like a band logo
+  - On a weathered wooden signboard hanging from a wrought-iron bracket by
+    chains at the upper right of the frame, two lines:
+        PRACTICE BECOMES MEMORY
+        MEMORY BECOMES SONG
+
+COLOUR
+Dominated by oxidized copper green and deep teal shadow. The only warm light
+is amber ember glow from the valve amplifiers and the pale storm break behind
+the colossus. Living skin, bone and weathered stone provide the highlights.
+
+COMPOSITION
+Keep every figure and all text within the central horizontal band of the
+frame.
+
+DO NOT INCLUDE
+No sheer, transparent, or wet-clinging clothing. No thigh slits, bare
+midriffs, or exposed legs. No instrument held in anyone's hands. No wings on
+anything except the carved Pegasus relief. No cherubs or putti. No
+science-fiction robots. No skulls,
+pentagrams, inverted crosses, or fire. No modern LED lighting rig, truss, or
+lasers. No audience or crowd. No text other than that specified above.

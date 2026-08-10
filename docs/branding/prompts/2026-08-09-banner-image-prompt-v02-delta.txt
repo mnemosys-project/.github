@@ -1,0 +1,65 @@
+MNEMOSYS PROJECT — ORG BANNER IMAGE
+v02 DELTA PROMPT — targeted edits to an existing v01 image.
+
+USE THIS IN THE SAME ChatGPT CONVERSATION THAT PRODUCED v01, immediately after
+that image, so the model still has it in context. Paste everything below the
+line.
+
+If the session has been lost, use 2026-08-09-banner-image-prompt-v02.txt
+instead — the from-scratch rebuild.
+
+Rationale and v01 assessment: 2026-08-09-banner-image-design.md §16
+
+────────────────────────────────────────────────────────────────────────
+
+Keep the previous image exactly as it is. Same composition, same camera
+position, same figures in the same places, same lighting and storm, same
+colour palette, same architecture, same instruments, same text and the same
+spelling of every word. Change only the five things listed below, and change
+nothing else.
+
+1. MELETE AND AOEDE ARE LIVING WOMEN, NOT STATUES.
+   The two women on the plinths currently look like pale stone or marble
+   figures. They must instead be unmistakably alive: warm living skin with
+   real colour in the face, throat, arms and hands, flushed with effort, damp
+   hair, sweat catching the amber light. They are working musicians standing
+   in the rain, not sculpture.
+   The colossal seated figure at the rear stays exactly as she is — weathered
+   green bronze. She is the only statue among the three, and the contrast
+   between her metal and their living skin should be immediately obvious.
+
+2. MAKE THE BRONZE AUTOMATA CLEARLY VISIBLE.
+   The small bronze attendant figures at the left and right wings are too dark
+   and too small to read. Bring them forward onto the stage and enlarge them
+   so each is clearly legible — roughly waist-height relative to the two
+   women. Light them so their polished bronze catches the warm amber glow from
+   the amplifiers.
+   They remain plainly attendants and nothing more: one coiling a cable, one
+   holding a sheet of music up to the light, one adjusting a microphone stand.
+   None of them touches an instrument, stands on a plinth, or resembles either
+   of the women.
+
+3. ADD MELETE'S WAX TABLET.
+   On the amplifier cabinet beside the left-hand woman, next to the bronze
+   pyramid metronome, add a shallow wooden writing tablet filled with dark
+   wax, its surface scratched with rows of musical notation, with a bright
+   polished bronze stylus lying across it.
+
+4. APPLY THE MATERIAL RULE SO IT IS VISIBLE.
+   The rule is: bronze is bright where it is handled every day, and green
+   where it is neglected.
+   Oxidize the instruments that stand untouched on their stands — the kithara,
+   the electric bass, the Flying V guitar, the hurdy-gurdy and the aulos
+   should all show green verdigris patina across their metal parts.
+   Keep bright polished bronze only where hands touch metal daily: the
+   metronome, the stylus, the automata's hands, the fretboards worn clean by
+   fingers, and the rim of the spring basin.
+
+5. CHANGE THE LEFT-HAND WOMAN'S EXPRESSION.
+   She currently looks startled. She should look absorbed and effortful
+   instead — brow furrowed in concentration, eyes down on the sheet in front
+   of her, lips parted as she counts a beat under her breath.
+
+Do not alter the sign, the carved names, the blackletter lettering, the
+Pegasus relief, the amplifier wall, the waterfall, the ruins on the
+mountainside, the rain, or the framing. Do not add any new text.

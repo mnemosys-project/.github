@@ -222,7 +222,52 @@ vrg-commit --type docs --scope standards \
 vrg-pr-workflow report-ready
 ```
 
-## Task A3: Create the `docs` repository
+## Task A3: Integrate the org banner image and its design record
+
+**Repo:** `mnemosys-project/.github`
+**Blocks:** A1 — the banner is the top of `profile/README.md`, which A1 writes.
+
+The banner was designed and generated in a separate session during bootstrap.
+Seven images, six prompts, and a 578-line design document were left in the plain
+parent directory, outside version control. This task brings them in.
+
+**Files:**
+- Create: `profile/banner.png` (the accepted v03 generation)
+- Create: `docs/branding/banner-design.md`
+- Create: `docs/branding/prompts/*.txt` (six prompts, v01–v04)
+- Create: `docs/branding/generations/*.png` (six non-accepted generations)
+- Modify: `epics/1-org-bootstrap-melete-v1/plan.md` (this file — A3 added,
+  former A3/A4 renumbered to A4/A5)
+
+- [ ] **Step 1: Place the accepted image at the path the README will reference**
+
+`mnemosys-project-main-image-v03.png` becomes `profile/banner.png`. It lives
+**once**, and is not duplicated into `generations/` — that would carry 3 MB
+twice for no gain.
+
+- [ ] **Step 2: Archive every other generation and every prompt**
+
+Roughly 20 MB in total. Keep all of it. The design document's §16 is explicit
+that the drift between what was specified and what arrived is the only place the
+generator's actual behaviour is recorded, and that record produced three
+transferable findings — cold prompts beat deltas, the generator drops predicates
+and multiplies nouns, and figure scale was never specified in any prompt.
+
+- [ ] **Step 3: Update the design document's own location notes**
+
+It carries a "provisional location" header saying it belongs in
+`mnemosys-project/.github` once bootstrap lands, and a closing "Next: move these
+files into version control." Both are now satisfied and must be replaced rather
+than left describing a state that no longer holds.
+
+- [ ] **Step 4: Validate, commit, report ready**
+
+```bash
+vrg-container-run -- vrg-validate
+vrg-pr-workflow report-ready --issue 8 ...
+```
+
+## Task A4: Create the `docs` repository
 
 **Repo:** `mnemosys-project/docs`
 **Blocked-by:** human-gated repository creation.
@@ -265,7 +310,7 @@ vrg-commit --type docs --scope site --message "add initial org site"
 vrg-pr-workflow report-ready
 ```
 
-## Task A4: Create the `melete` repository
+## Task A5: Create the `melete` repository
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** human-gated repository creation.
@@ -337,7 +382,7 @@ tracking upstream, and an unpinned range would silently change the renderer.
 
 Built inside out. Every task's deliverable is testable without the layer above
 it existing. All tasks in this phase are **Repo: `mnemosys-project/melete`** and
-**Blocked-by: A4**.
+**Blocked-by: A5**.
 
 ## Task B1: `theory.py` — 12-TET math
 
@@ -1811,12 +1856,13 @@ failure the task stays open and the epic stays open.
 | # | Task | Repo | Blocked-by |
 |---|---|---|---|
 | — | Documentation (#2) | `.github` | — |
-| A1 | Org metadata and health files | `.github` | — |
+| A1 | Org metadata and health files | `.github` | A3 |
 | A2 | Epic document format standards | `.github` | — |
-| A3 | Create `docs` repo and site | `docs` | human gate |
-| A4 | Create `melete` repo | `melete` | human gate |
-| B1 | `theory.py` | `melete` | A4 |
-| B2 | `instrument.py` | `melete` | A4 |
+| A3 | Banner image and design record | `.github` | — |
+| A4 | Create `docs` repo and site | `docs` | human gate |
+| A5 | Create `melete` repo | `melete` | human gate |
+| B1 | `theory.py` | `melete` | A5 |
+| B2 | `instrument.py` | `melete` | A5 |
 | B3 | `vocabulary.py` | `melete` | B1 |
 | B4 | `score.py` | `melete` | B2 |
 | B5 | `families/chromatic.py` | `melete` | B4 |
@@ -1863,6 +1909,7 @@ against.
 | §12 Output, cover page, session log, per-exercise sources | B12, B14, B15a |
 | §13 Error handling, vocabulary registry | B3, B11, B13, B14 |
 | §14 Testing strategy | every task's test steps |
-| §15 Repo and Vergil integration | A4 |
+| §15 Repo and Vergil integration | A5 |
+| *Org banner and its design record* | A3 |
 | §15 Installation for daily use | C1 |
 | *Document formats* | A2 |
