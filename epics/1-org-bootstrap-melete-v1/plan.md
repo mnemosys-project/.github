@@ -1855,6 +1855,421 @@ def test_vocabulary_lists_every_axis():
 
 ---
 
+# Phase S — Spelling
+
+Implements spec §10a and decisions #27–30. Reverses decision #9, which was not a
+notation choice but a missing layer: a 12-TET integer cannot distinguish F♯ from
+G♭, so "notate in C with explicit accidentals" engraved F♯ Dorian as G♭ A♭ B𝄫 C♭
+D♭ E𝄫 F♭ — a different key, with the tablature staying correct and disagreeing
+silently.
+
+All tasks are **Repo: `mnemosys-project/melete`**.
+
+**Sequencing is load-bearing.** S1 and S2 must land **before B7 (#10) and B8
+(#11)**, so the arpeggios and intervals families set `key` from the start.
+Building those families first means retrofitting four families instead of two.
+S3 depends only on S1 and S2 and can run in parallel with the families. S4 is
+independent of everything.
+
+## Task S1: `theory` — the spelling model
+
+**Files:**
+- Modify: `src/melete/theory.py`
+- Test: `tests/test_theory.py`
+
+**Interfaces:**
+- Consumes: `SCALES`, `CHORDS`, the existing `_lookup`.
+- Produces:
+  - `Key(tonic: int, scale_type: str)` — frozen
+  - `SpelledPitch(letter: str, alteration: int, octave: int)` — frozen
+  - `tier(scale_type: str) -> int` — 1, 2 or 3
+  - `parent_scale(scale_type: str) -> str | None`
+  - `tonic_spelling(key: Key) -> tuple[str, int]`
+  - `spell(key: Key | None, pitches: Sequence[int], descending: bool = False) -> list[SpelledPitch]`
+  - `IMPLIED_PARENT: dict[str, str]` — chord quality → scale identifier
+
+`SpelledPitch` is **notation-neutral**: no LilyPond, no Unicode accidentals.
+`alteration` is semitones, −2 to +2. `letter` is one of `CDEFGAB`.
+
+- [ ] **Step 1: Write the failing tests for tier classification and parents**
+
+```python
+import pytest
+from melete.theory import IMPLIED_PARENT, SCALES, parent_scale, tier
+
+def test_the_seven_diatonic_modes_are_tier_1() -> None:
+    for mode in ("ionian", "dorian", "phrygian", "lydian",
+                 "mixolydian", "aeolian", "locrian"):
+        assert tier(mode) == 1
+        assert parent_scale(mode) is None
+
+def test_minor_family_scales_are_tier_2_with_a_parent() -> None:
+    assert tier("melodic_minor") == 2
+    assert parent_scale("melodic_minor") == "aeolian"
+    assert tier("harmonic_minor") == 2
+    assert parent_scale("blues") == "aeolian"
+    assert parent_scale("major_pentatonic") == "ionian"
+
+def test_symmetric_scales_are_tier_3_and_parentless() -> None:
+    for name in ("whole_tone", "diminished_whole_half", "diminished_half_whole"):
+        assert tier(name) == 3
+        assert parent_scale(name) is None
+
+def test_every_scale_type_has_a_tier() -> None:
+    """A scale added to SCALES without a tier is a silent spelling bug."""
+    for name in SCALES:
+        assert tier(name) in (1, 2, 3)
+
+def test_every_chord_quality_maps_to_a_real_scale() -> None:
+    from melete.theory import CHORDS
+    assert set(IMPLIED_PARENT) == set(CHORDS)
+    assert all(parent in SCALES for parent in IMPLIED_PARENT.values())
+    assert IMPLIED_PARENT["maj7"] == "ionian"
+    assert IMPLIED_PARENT["m7b5"] == "locrian"
+
+def test_unknown_scale_type_names_accepted_values() -> None:
+    with pytest.raises(KeyError) as exc:
+        tier("dorain")
+    assert "dorain" in str(exc.value)
+    assert "dorian" in str(exc.value)
+```
+
+- [ ] **Step 2: Run and confirm failure**
+
+Run: `vrg-container-run -- uv run --frozen pytest tests/test_theory.py -q`
+Expected: FAIL — `ImportError: cannot import name 'tier'`.
+
+- [ ] **Step 3: Implement tiers, parents and the chord mapping**
+
+```python
+_TIER_1 = ("ionian", "dorian", "phrygian", "lydian",
+           "mixolydian", "aeolian", "locrian")
+
+#: Tier 2 scales borrow their key signature from a parent (spec section 10a).
+_PARENTS: dict[str, str] = {
+    "melodic_minor": "aeolian", "dorian_b2": "aeolian",
+    "lydian_augmented": "aeolian", "lydian_dominant": "aeolian",
+    "mixolydian_b6": "aeolian", "locrian_natural2": "aeolian",
+    "altered": "aeolian",
+    "harmonic_minor": "aeolian", "locrian_natural6": "aeolian",
+    "ionian_sharp5": "aeolian", "dorian_sharp4": "aeolian",
+    "phrygian_dominant": "aeolian", "lydian_sharp2": "aeolian",
+    "ultralocrian": "aeolian",
+    "major_pentatonic": "ionian",
+    "minor_pentatonic": "aeolian",
+    "blues": "aeolian",
+}
+
+_TIER_3 = ("whole_tone", "diminished_whole_half", "diminished_half_whole")
+
+IMPLIED_PARENT: dict[str, str] = {
+    "maj": "ionian", "maj6": "ionian", "maj7": "ionian",
+    "min": "aeolian", "min6": "aeolian", "min7": "aeolian",
+    "min_maj7": "aeolian",
+    "dom7": "mixolydian",
+    "m7b5": "locrian",
+    "dim": "diminished_whole_half", "dim7": "diminished_whole_half",
+    "aug": "whole_tone",
+}
+
+
+def tier(scale_type: str) -> int:
+    _lookup(SCALES, "scale_type", scale_type)
+    if scale_type in _TIER_1:
+        return 1
+    if scale_type in _TIER_3:
+        return 3
+    return 2
+
+
+def parent_scale(scale_type: str) -> str | None:
+    _lookup(SCALES, "scale_type", scale_type)
+    return _PARENTS.get(scale_type)
+```
+
+- [ ] **Step 4: Run and confirm pass**
+
+- [ ] **Step 5: Write the failing tests for the letter rule and tonic choice**
+
+```python
+from melete.theory import Key, spell, tonic_spelling
+
+def letters(key: Key, octaves: int = 1) -> str:
+    from melete.theory import scale_pitches
+    pitches = scale_pitches(60 + key.tonic, key.scale_type, octaves)
+    return " ".join(
+        f"{p.letter}{'#' * p.alteration if p.alteration > 0 else 'b' * -p.alteration}"
+        for p in spell(key, pitches[:-1])
+    )
+
+def test_f_sharp_dorian_is_spelled_with_sharps() -> None:
+    """The original defect: this engraved as Gb Ab Bbb Cb Db Ebb Fb."""
+    assert letters(Key(6, "dorian")) == "F# G# A B C# D# E"
+
+def test_the_tonic_letter_minimises_signature_accidentals() -> None:
+    assert tonic_spelling(Key(6, "dorian")) == ("F", 1)     # F#, 4 sharps
+    assert tonic_spelling(Key(1, "ionian")) == ("D", -1)    # Db, 5 flats
+
+def test_a_diatonic_scale_uses_each_letter_once() -> None:
+    for tonic in range(12):
+        for mode in ("ionian", "dorian", "phrygian", "lydian",
+                     "mixolydian", "aeolian", "locrian"):
+            names = letters(Key(tonic, mode)).split()
+            assert len({n[0] for n in names}) == 7
+
+def test_spelling_always_sounds_the_right_pitch() -> None:
+    """The central invariant's analogue. This is the assertion that matters."""
+    from melete.theory import SCALES, scale_pitches
+    naturals = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    for tonic in range(12):
+        for scale_type in SCALES:
+            pitches = scale_pitches(60 + tonic, scale_type, 1)
+            for pitch, spelled in zip(pitches, spell(Key(tonic, scale_type), pitches),
+                                      strict=True):
+                assert (naturals[spelled.letter] + spelled.alteration) % 12 == pitch % 12
+
+def test_no_key_signature_needs_a_double_accidental() -> None:
+    from melete.theory import SCALES
+    for tonic in range(12):
+        for scale_type in SCALES:
+            _, alteration = tonic_spelling(Key(tonic, scale_type))
+            assert abs(alteration) <= 1
+
+def test_symmetric_scales_spell_by_direction() -> None:
+    from melete.theory import scale_pitches
+    pitches = scale_pitches(60, "whole_tone", 1)
+    ascending = spell(Key(0, "whole_tone"), pitches)
+    descending = spell(Key(0, "whole_tone"), pitches, descending=True)
+    assert any(p.alteration > 0 for p in ascending)
+    assert any(p.alteration < 0 for p in descending)
+
+def test_no_key_spells_chromatically_by_direction() -> None:
+    up = spell(None, [60, 61, 62])
+    assert (up[1].letter, up[1].alteration) == ("C", 1)      # C#
+    down = spell(None, [62, 61, 60], descending=True)
+    assert (down[1].letter, down[1].alteration) == ("D", -1)  # Db
+```
+
+- [ ] **Step 6: Run and confirm failure**
+
+- [ ] **Step 7: Implement spelling**
+
+The letter rule: walk `CDEFGAB` from the tonic's letter, one letter per degree,
+and derive each alteration as the difference between the pitch class and the
+letter's natural pitch class, wrapped into −2…+2. For tier 2 subsets
+(pentatonics, blues) spell each pitch as the parent spells it. For tier 3 and
+`key is None`, choose the letter below (sharp) when ascending and the letter
+above (flat) when descending.
+
+`tonic_spelling` tries each candidate spelling of the tonic pitch class with
+alteration in −1, 0, +1, rejects any whose scale needs an alteration outside
+−2…+2, and returns the candidate with the fewest total accidentals. Ties break
+toward the smaller `|alteration|`, then toward flats — deterministic, so the
+sweep is reproducible.
+
+- [ ] **Step 8: Run and confirm pass**
+
+- [ ] **Step 9: REFACTOR** (see the standing step), then commit
+
+```bash
+vrg-commit --type feat --scope theory --message "add the spelling model" --body "..."
+```
+
+## Task S2: `score` and `rhythm` — carry the key
+
+**Blocked-by:** S1
+
+**Files:**
+- Modify: `src/melete/score.py`
+- Modify: `src/melete/rhythm.py`
+- Modify: `src/melete/families/chromatic.py`, `src/melete/families/scales.py`
+- Test: `tests/test_score.py`, `tests/test_rhythm.py`, `tests/families/conftest.py`
+
+**Interfaces:**
+- Consumes: `theory.Key`, `theory.SCALES`.
+- Produces: `Score.key: Key | None`; `assert_spelling_sounds_correctly(score)` in
+  the shared family conftest.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+import pytest
+from melete.score import Score
+from melete.theory import Key
+
+def test_score_carries_a_key() -> None:
+    score = make_score(key=Key(6, "dorian"))
+    assert score.key == Key(6, "dorian")
+
+def test_key_is_optional_because_chromatic_exercises_have_none() -> None:
+    assert make_score(key=None).key is None
+
+def test_an_out_of_range_tonic_is_rejected() -> None:
+    with pytest.raises(ValueError, match="tonic"):
+        make_score(key=Key(12, "dorian"))
+
+def test_an_unknown_scale_type_in_a_key_is_rejected() -> None:
+    with pytest.raises(KeyError, match="dorain"):
+        make_score(key=Key(0, "dorain"))
+
+def test_rhythm_carries_the_key_through() -> None:
+    """rhythm rebuilds the Score, so this is a real risk, not a formality."""
+    from melete.rhythm import apply
+    source = make_score(key=Key(6, "dorian"))
+    assert apply(source, RHYTHM_PARAMS).key == Key(6, "dorian")
+```
+
+- [ ] **Step 2: Run and confirm failure**
+
+- [ ] **Step 3: Implement**
+
+Add the field and its validation to `Score`; add `key=score.key` where `rhythm`
+rebuilds the Score. `scales.generate` sets `Key(root % 12, scale_type)`;
+`chromatic.generate` sets `key=None` explicitly, with a comment saying it is
+tier 3 by definition rather than an omission.
+
+- [ ] **Step 4: Run and confirm pass**
+
+- [ ] **Step 5: Add the shared spelling assertion to the family conftest**
+
+```python
+def assert_spelling_sounds_correctly(score: Score) -> None:
+    """Every spelled note must sound the pitch it names (spec section 14)."""
+    naturals = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    notes = notes_of(score)
+    spelled = theory.spell(score.key, [n.pitch for n in notes])
+    for note, name in zip(notes, spelled, strict=True):
+        sounded = (naturals[name.letter] + name.alteration) % 12
+        assert sounded == note.pitch % 12, (
+            f"{name.letter}{name.alteration:+d} does not sound pitch {note.pitch}"
+        )
+```
+
+Call it from every family test module alongside `assert_central_invariant`.
+
+- [ ] **Step 6: REFACTOR, then commit**
+
+- [ ] **Step 7: Add the `key` requirement to the B7 and B8 issues**
+
+```bash
+vrg-gh issue comment 10 --repo mnemosys-project/melete --body "..."
+vrg-gh issue comment 11 --repo mnemosys-project/melete --body "..."
+```
+
+Each comment must say: set `Key(root % 12, IMPLIED_PARENT[quality])` for
+arpeggios, and `Key(root % 12, scale_type)` when `context` is diatonic and
+`None` when chromatic for intervals. Without this the two families ship with no
+key and the spelling silently falls back to tier 3.
+
+## Task S3: `lilypond/emit` — key signatures and spelled names
+
+**Blocked-by:** S1, S2
+
+**Files:**
+- Modify: `src/melete/lilypond/emit.py`
+- Test: `tests/lilypond/test_emit.py`
+- Modify: `tests/lilypond/golden/*.ly` (regenerated)
+
+**Interfaces:**
+- Consumes: `theory.spell`, `theory.tonic_spelling`, `theory.tier`,
+  `theory.parent_scale`, `Score.key`.
+- Produces: no new public surface; `_PITCH_NAMES` is **deleted**.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+def test_a_diatonic_key_emits_its_signature() -> None:
+    out = emit_score(score_in(Key(6, "dorian")), staves="both")
+    assert "\\key fis \\dorian" in out
+
+def test_a_tier_2_key_borrows_its_parent_signature() -> None:
+    out = emit_score(score_in(Key(0, "harmonic_minor")), staves="both")
+    assert "\\key c \\minor" in out
+
+def test_a_symmetric_scale_emits_no_signature() -> None:
+    out = emit_score(score_in(Key(0, "whole_tone")), staves="both")
+    assert "\\key" not in out
+
+def test_key_signatures_false_omits_the_signature_but_keeps_the_spelling() -> None:
+    out = emit_score(score_in(Key(6, "dorian")), staves="both", key_signatures=False)
+    assert "\\key" not in out
+    assert "fis" in out          # still spelled F#, not ges
+
+def test_f_sharp_dorian_never_emits_flats() -> None:
+    """Named regression test for the original defect."""
+    out = emit_score(score_in(Key(6, "dorian")), staves="both")
+    for wrong in ("ges", "aes", "beses", "ces", "des", "eeses", "fes"):
+        assert wrong not in out
+
+def test_the_cover_page_names_the_tonic_as_spelled() -> None:
+    out = emit_book([score_in(Key(6, "dorian"))], cover=COVER)
+    assert "F#" in out or "F♯" in out
+    assert "Gb" not in out
+```
+
+- [ ] **Step 2: Write the tablature-invariance test — the boundary proof**
+
+```python
+def test_tablature_is_unchanged_by_spelling(tmp_path) -> None:
+    """Spelling must not leak into tab. Cheap proof of a claimed boundary."""
+    sharp = emit_score(score_in(Key(6, "dorian")), staves="tab")
+    flat = emit_score(score_in(Key(6, "lydian")), staves="tab")
+    assert tab_body(sharp) == tab_body(flat)
+```
+
+- [ ] **Step 3: Run and confirm failure**
+
+- [ ] **Step 4: Implement**
+
+Add `_LILYPOND_MODES: dict[str, str]` mapping the seven tier-1 identifiers to
+their LilyPond keywords, plus `ionian` → `major` and `aeolian` → `minor` for the
+tier-2 parents. Emit `\key <tonic> <mode>` for tiers 1 and 2 when
+`key_signatures` is true; omit it for tier 3, for `key is None`, and when
+`key_signatures` is false. Replace every use of `_PITCH_NAMES` with a
+`SpelledPitch` converted to LilyPond's Dutch names — `fis`, `ges`, `cisis` — and
+delete the table.
+
+- [ ] **Step 5: Run and confirm pass**
+
+- [ ] **Step 6: Regenerate the golden files and read the diff**
+
+Regenerate, then **read every changed line** before committing. The goldens pin
+text, not correctness — a wrong-but-plausible construct will keep passing
+forever, so the diff is the only review this output gets before a real render.
+
+- [ ] **Step 7: REFACTOR, then commit**
+
+## Task S4: `config` — the `key_signatures` default
+
+**Blocked-by:** none
+
+**Files:**
+- Modify: `src/melete/config.py`
+- Test: `tests/test_config.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+def test_key_signatures_defaults_to_true() -> None:
+    assert load_string("").output.key_signatures is True
+
+def test_key_signatures_can_be_turned_off() -> None:
+    cfg = load_string("[output]\nkey_signatures = false")
+    assert cfg.output.key_signatures is False
+
+def test_key_signatures_rejects_a_non_boolean() -> None:
+    with pytest.raises(ConfigError, match="key_signatures"):
+        load_string('[output]\nkey_signatures = "yes"')
+```
+
+- [ ] **Step 2: Run and confirm failure**
+
+- [ ] **Step 3: Flip the default and confirm pass**
+
+- [ ] **Step 4: REFACTOR, then commit**
+
+---
+
 # Phase C — Proof
 
 ## Task C1: Deploy melete into daily use
@@ -1930,6 +2345,10 @@ failure the task stays open and the epic stays open.
 | B14 | `session.py` | `melete` | B10 |
 | B15a | `cli.py` — generate and its flags | `melete` | B11-B14 |
 | B15b | `cli.py` — replay, show, families, vocabulary | `melete` | B15a |
+| S1 | `theory` — the spelling model | `melete` | — |
+| S2 | `score` + `rhythm` carry the key | `melete` | S1 |
+| S3 | `lilypond/emit` — signatures and spelled names | `melete` | S1, S2 |
+| S4 | `config` — `key_signatures` default | `melete` | — |
 | C1 | Deploy into daily use | `melete` | B15b |
 | C2 | Validate on paper | `melete` | C1 |
 | — | Documentation review (#3) | `.github` | all above |
@@ -1955,7 +2374,8 @@ against.
 | §7 Per-family tempo defaults | B5–B8, B11 |
 | §8 Rhythm modifier, all four axes | B9 |
 | §9 Selection, weighting, validity, replay | B10, B14 |
-| §10 Configuration | B11 |
+| §10 Configuration | B11, S4 |
+| §10a Accidental spelling | S1, S2, S3 |
 | §11 CLI — `generate` and flags | B15a |
 | §11 CLI — `replay`, `show`, `families`, `vocabulary` | B15b |
 | §12 Output, cover page, session log, per-exercise sources | B12, B14, B15a |
