@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Naming convention
+    url: https://github.com/mnemosys-project/.github/blob/develop/NAMING.md
+    about: >-
+      Before proposing a new tool or a name for one, read the naming scheme.
+      The organization is named for memory; each tool is named for a Muse.
+  - name: Support and routing
+    url: https://github.com/mnemosys-project/.github/blob/develop/SUPPORT.md
+    about: Not sure which repository your issue belongs in? Start here.
