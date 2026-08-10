@@ -412,7 +412,7 @@ Derived from MNEMOSYS A1, A2.
 | Axis            | Values                                                      |
 |-----------------|-------------------------------------------------------------|
 | `root`          | 12 pitch classes                                            |
-| `quality`       | maj, min, dim, aug, maj7, min7, dom7, m7b5, dim7, minMaj7, 6, m6 |
+| `quality`       | maj, min, dim, aug, maj7, min7, dom7, m7b5, dim7, min_maj7, maj6, min6 |
 | `inversion`     | root, first, second, third                                  |
 | `traversal`     | positional, across-strings, single-string                   |
 | `string_set`    | subsets                                                     |
