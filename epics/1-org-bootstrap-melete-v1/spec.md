@@ -853,6 +853,26 @@ path, and this is what that choice costs. It is recorded here, next to the
 tiers, so a reader meets it as a stated boundary rather than discovering it in
 an engraved sheet.
 
+### The plain diminished triad follows it, and the alternative was declined
+
+`dim` maps to the same parent as `dim7`, so the triad is spelled by direction
+too: `A dim` spells `A C D#` rather than the functional `A C Eb`.
+
+Unlike the seventh chord, this one is fixable. Locrian contains both the ♭3 and
+the ♭5, so mapping `IMPLIED_PARENT["dim"]` to locrian would spell `A C Eb` and
+satisfy the containment property while doing it. The triad is not the seventh:
+a parent exists that names all three of its tones.
+
+It was left in tier 3 deliberately. Remapping it moves the quality between
+tiers, which splits `dim` from `dim7` — the seventh cannot follow it, for the
+reason above — and the judgment was to see how the raised fourth reads on an
+engraved sheet before changing the model to avoid it.
+
+So this is an accepted outcome with a named alternative, not a case that was
+missed. A reader who meets `A C D#` in a generated sheet is looking at the tier
+the quality was left in, and the change, should the review ask for it, is one
+entry in `IMPLIED_PARENT`.
+
 ### Where spelling lives
 
 `theory` owns it. That module already owns modes, intervals and chord content,
@@ -868,17 +888,58 @@ what it had.
 Tablature never consults any of this. A spelling change must leave the tab staff
 byte-identical, and §14 asserts it.
 
-### Why the policy sits behind one entry point
+### The tablature staff spells keylessly
+
+The emitter passes `key=None` for the tab staff, in `both` mode and in `tab`
+mode alike, so the tablature is spelled by direction while the notation staff
+is spelled for the key. In a flat key the two staves therefore name the same
+pitch differently in the source: `ges` on the notation staff, `fis` in the tab.
+
+That is the boundary rather than a shortcut. A fret number is a function of
+pitch, and F♯ and G♭ are the same pitch, so a change of key cannot move a fret.
+Feeding the tab staff the key's spelling would make its source vary with a
+change that cannot affect its content — which is precisely what the
+byte-identical tablature assertion in §14 forbids. The keyless tab is what
+makes that assertion literally true rather than approximately so.
+
+The cost is cosmetic and was accepted. LilyPond derives identical fret numbers
+from both spellings, so nothing on the engraved page differs; only a reader of
+the raw `.ly` sees the disagreement. To that reader it can look like exactly
+the notation-versus-tablature divergence this section exists to fix, and it is
+not: the original defect was two staves carrying different music, and this is
+two staves carrying the same music under two names.
+
+### The instructor-review list
 
 Tier 1 is fully determined. **Tier 2 is conventional practice and tier 3 is a
-defensible convention rather than a rule** — and both will be reviewed by a
-reader with formal training once real sheets exist. Blue-note spelling, the
-fully diminished seventh above, the diminished scales, and whether modal
-material should carry a signature at all are exactly the questions that will
-come back with corrections. `C D# F# A` will read as wrong to an instructor,
-and the honest answer is that it is the cost of the contract rather than an
-oversight — recorded here so the review starts from that answer.
+defensible convention rather than a rule**, and both will be reviewed by a
+reader with formal training once real sheets exist. This list is the agenda for
+that conversation: every place the model produces something a trained reader is
+likely to call wrong, with the answer the design already has.
 
+- **Blue-note spelling.** The blues scale is spelled as its natural-minor
+  parent spells it, so the blue note is a ♭5 and not a ♯4. Tier 2 convention.
+- **The fully diminished seventh.** `C dim7` spells `C D# F# A`, not
+  `C Eb Gb Bbb`. Unfixable inside the model: no seven-note parent contains a
+  doubly diminished seventh.
+- **The plain diminished triad.** `A dim` spells `A C D#`, not `A C Eb`.
+  Fixable — locrian would spell it functionally — and deliberately not fixed.
+- **The symmetric scales.** Whole-tone and both diminished scales are spelled
+  by direction, so letters skip or repeat. They have no parent to inherit from.
+- **Signatures on modal material.** Whether `\key fis \dorian` is the right
+  default at all, or whether modal exercises should print no signature and
+  spell every altered tone explicitly.
+- **The keyless tablature staff.** `ges` on the notation staff and `fis` in the
+  tab for the same pitch. Visible in the `.ly` source only.
+
+`C D# F# A` will read as wrong to an instructor, and the honest answer in every
+case above is that it is the cost of a deliberate contract rather than an
+oversight — recorded here so the review starts from that answer instead of
+rediscovering each item as a bug.
+
+### Why the policy sits behind one entry point
+
+The list above is a list of expected revisions, which is what shapes the code.
 So the three tiers live in one module behind one entry point, for the same
 reason §9 requires it of the selection weighting: the revision we are expecting
 should be a small local change, not a refactor. A policy scattered across four
@@ -1354,6 +1415,19 @@ is a boundary the design accepts rather than a repair it defers.
 | # | Decision | Rationale |
 |---|---|---|
 | 31 | Accept the fully diminished seventh's tier-3 spelling as a structural limit; do not add degree-aware chord spelling to correct it | `dim` and `dim7` are spelled by direction, so C dim7 spells `C D# F# A` rather than the functional `C Eb Gb Bbb`. Remapping cannot fix it: the chord needs a doubly diminished seventh and no seven-note scale supplies one, so no parent contains it. The functional spelling requires the speller to know that a pitch is *the seventh of this chord*, and `spell(key, pitches)` takes bare pitches and infers function from pitch-class membership — the narrow contract that lets one mechanism serve both scales and chords. Flagged for instructor review alongside the blue note. |
+
+### Resolutions from the spelling-outcome review
+
+Decisions 32 and 33 were recorded on 2026-08-10, from a review of what the §10a
+model actually produces rather than of what it says. Neither is a repair
+deferred to later: both are outcomes that look like defects to a reader who has
+not seen the reasoning, and both were accepted so that the first instructor
+review starts from the reasoning instead of rediscovering them.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 32 | Leave `dim` in tier 3 alongside `dim7`; do not remap `IMPLIED_PARENT["dim"]` to locrian | `A dim` therefore spells `A C D#` rather than the functional `A C Eb`. Unlike `dim7` this one is fixable — locrian contains both the ♭3 and the ♭5, names all three chord tones, and would satisfy the containment property — so the alternative is recorded as declined rather than absent. Remapping moves the quality between tiers and splits `dim` from `dim7`, which cannot follow it, and the judgment was to see how the raised fourth reads on an engraved sheet before changing the model to avoid it. Flagged for instructor review. |
+| 33 | The tablature staff spells keylessly in both staff modes; accept the two staves naming one pitch differently in the source | `emit.py` passes `key=None` for the tab staff, so in a flat key the notation staff writes `ges` where the tab writes `fis`. A fret is a function of pitch and F♯ and G♭ are the same pitch, so a change of key cannot move a fret; feeding the tab the key's spelling would make its source vary with a change that cannot affect its content, which is what §14's byte-identical tablature assertion forbids. LilyPond derives identical frets from both spellings, so the cost is confined to a reader of the raw `.ly` — accepted rather than paid for with a coupling the boundary rules out. |
 
 ## 17. Deferred to v2
 
