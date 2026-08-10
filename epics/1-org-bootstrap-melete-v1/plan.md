@@ -16,8 +16,8 @@ out, from pure 12-TET math through the Score IR to the LilyPond emitter, so that
 every layer is testable before the layer above it exists. Phase C proves the
 result on real hardware and real paper.
 
-**Tech Stack:** Python 3.14, `uv`, pytest, ruff, mypy. One runtime dependency:
-the PyPI `lilypond` redistribution (2.25.12). Development inside
+**Tech Stack:** Python 3.14, `uv`. No runtime Python dependencies; LilyPond is a
+binary on `PATH` (spec §15, decision #23). Development inside
 `vrg-container-run` against `dev-python`.
 
 ## Global Constraints
@@ -25,9 +25,15 @@ the PyPI `lilypond` redistribution (2.25.12). Development inside
 Every task's requirements implicitly include this section. Values are copied
 verbatim from the spec.
 
-- **Python 3.14**, `uv`-managed. Dev group: pytest, ruff, mypy (spec §15).
-- **Runtime dependency is `lilypond` and nothing else** (spec §15). Adding any
-  other runtime dependency requires revisiting decision #5.
+- **Python 3.14**, `uv`-managed. Dev group is a contract with `vrg-validate`:
+  pytest, pytest-cov, ruff, **`ty` and `mypy`**, **`pip-audit` and
+  `pip-licenses`** (spec §15, decision #25).
+- **No runtime Python dependencies** (spec §15, decision #23). LilyPond is a
+  binary on `PATH`. Adding any runtime dependency requires revisiting
+  decision #5.
+- **100% test coverage is enforced by the pipeline**, from the first module
+  onward (spec §14). Deliberate exclusions need an explicit `# pragma: no cover`
+  with a reason.
 - **No swallowed exceptions, no fallbacks that hide errors** (spec §13). A
   failure in the generator becomes a wrong exercise on the page, which is worse
   than no exercise.
@@ -389,24 +395,36 @@ vrg-gh repo view mnemosys-project/melete --json name,defaultBranchRef
 
 - [ ] **Step 4: Add the parallel-agent worktree section to `CLAUDE.md`**
 
-Copy the section from `mnemosys-project/.github/CLAUDE.md` verbatim.
+**Already done by the repo-init wizard** — it emits this section inside the
+`vergil:template:claude-md` markers, along with `.worktrees/` in `.gitignore`.
+Verify rather than duplicate.
 
-- [ ] **Step 5: Pin dependencies**
+- [ ] **Step 5: Create the Python project**
 
-`pyproject.toml`:
+`pyproject.toml`. Note there are **no runtime dependencies**: LilyPond is a
+binary on `PATH`, not a package (decision #23). The dev group is the set
+`vrg-validate` actually invokes (decision #25).
 
 ```toml
 [project]
 name = "melete"
 requires-python = ">=3.14"
-dependencies = ["lilypond==2.25.12"]
+dependencies = []
+
+[project.optional-dependencies]
+bundled-lilypond = ["lilypond==2.25.12"]   # x86_64 only; opt-in
 
 [dependency-groups]
-dev = ["pytest", "ruff", "mypy"]
+dev = ["pytest", "pytest-cov", "ruff", "ty", "mypy", "pip-audit", "pip-licenses"]
 ```
 
-The exact pin is deliberate (spec §15, decision #13): the redistribution is not
-tracking upstream, and an unpinned range would silently change the renderer.
+The pin on the optional extra is deliberate: that package is not tracking
+upstream, and an unpinned range would silently change the renderer.
+
+Also generate `uv.lock` (`uv lock`) and commit it — the container warmup runs
+`uv sync --frozen` and fails without one. Extend `.gitignore` to cover the five
+artifacts `vrg-validate` writes on every run: `.coverage`, `coverage.xml`,
+`junit.xml`, `licenses.json`, `pip-audit.json`.
 
 - [ ] **Step 6: Validate, commit, report ready**
 
@@ -1981,6 +1999,45 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   `vrg-gh api` to read the reference org's files; `gh api` is denied to the user
   identity. Replaced with raw URL fetches and `vrg-gh search code`, and the plan
   corrected so the next agent does not hit the same wall.
+
+- **melete's only runtime dependency turned out to be uninstallable, and the
+  spec was amended rather than worked around.** The PyPI `lilypond` package has
+  no aarch64 wheel at any version, so `uv sync` failed on both the arm64 dev
+  container and the Apple Silicon host. Forking — decision #13's stated remedy —
+  cannot fix Linux, because upstream publishes no `linux-arm64` binary either.
+  LilyPond became a binary prerequisite instead (decision #23). The fix cost one
+  line of `pyproject.toml` and no application code, which is decision #5's
+  containment argument paying out: the renderer did not change, its provenance
+  did, and `render.py` absorbed it. Two follow-ons were filed rather than
+  absorbed silently — `melete#21` for our own aarch64 wheels, and
+  `vergil-tooling#2718` for the fact that Vergil has no way to express a
+  repo-specific system dependency.
+
+- **`integration-tests` was turned off, and this is not a quiet reduction in
+  testing.** melete was created with `--integration-tests`, which made the
+  repository unmergeable: the flag adds `test / integration / 3.14` to the
+  branch ruleset's required checks, but the generated workflow never emits that
+  context, so the first PR blocked with nineteen of nineteen checks green. The
+  two tests §14 specifies still exist and still run locally; what was switched
+  off is CI's claim to run a suite it has no way to run — even with the context
+  emitted, they would fail on the missing binary. Two preconditions gate turning
+  it back on: `vergil-tooling#2720` for the propagation defect and
+  `vergil-tooling#2718` for the container. `vergil-tooling#2721` records the
+  underlying gap, which is that integration tests are not a first-class Vergil
+  feature at all — they exist in one grandfathered project. Tracked as
+  `melete#23`.
+
+  Worth noting how this was found: the tooling's own `vrg-github-repo-config
+  audit` reported the repository **compliant** throughout, because it does not
+  evaluate rulesets. The audit that exists to catch this pointed away from it.
+
+- **The dev toolchain was discovered by running the pipeline, not from the
+  spec.** §15 listed pytest, ruff and mypy. `vrg-validate` actually requires
+  `ty` *and* `mypy` for typecheck and `pip-audit` *and* `pip-licenses` for
+  audit, each surfacing only as a `FileNotFoundError` once the previous gap was
+  filled. Recorded as decision #25 so the next repository does not rediscover it
+  one failure at a time. The pipeline also enforces 100% coverage, which the
+  plan had nowhere stated.
 
 - **A2 revealed that no skill writes the Evolution log.** The
   `epic-retrospective` skill sources its §1 from a `plan.md` section named
