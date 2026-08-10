@@ -335,7 +335,10 @@ the exercise. LilyPond renders fingering marks natively.
 the single nested form, mapping directly onto LilyPond's `\tuplet 3/2 { ... }`.
 Measures are **not** modeled — durations imply barlines and LilyPond inserts
 them. Grouping against the meter (fives over 4/4) therefore requires no
-bar-splitting logic.
+bar-splitting logic. The rule is **enforced at runtime, not merely stated**:
+`score.py` rejects a `Tuplet` element that is not a `Note`, and a voice element
+that is not a `Note` or a `Tuplet`, with a `TypeError` naming the offending
+index (decision #26).
 
 **`Note.duration` is always the *written* value; `Tuplet.ratio` supplies the
 scaling.** A triplet of eighths is three notes of duration `1/8` inside a
@@ -471,10 +474,29 @@ Each family declares a default range, overridable per family in configuration:
 
 | Family | Default | Reasoning |
 |---|---|---|
-| `chromatic` | 60–80 | Finger-independence work is slow and deliberate; speed defeats it. |
-| `scales` | 80–100 | The reference range in §12's cover-page example. |
-| `arpeggios` | 80–100 | Comparable demand to scales. |
-| `intervals` | 70–90 | String crossing and skipping cost accuracy at speed. |
+| `chromatic` | 60–120 | Finger-independence work starts slow and deliberate, but the same permutation is played at speed once it is clean. |
+| `scales` | 80–140 | Three-notes-per-string patterns are practiced in triplets near the top of this range; the bottom of it is a warm-up. |
+| `arpeggios` | 80–140 | Comparable demand to scales. |
+| `intervals` | 70–130 | String crossing and skipping cost accuracy at speed, so the range starts lower — but not by as much as first assumed. |
+
+These ranges were revised upward after playing against them. The original set
+(60–80, 80–100, 80–100, 70–90) was reasoned from categories rather than from an
+instrument — chromatic work is deliberate, scales are faster — and the result was
+too slow to be useful. 80–100 for a three-notes-per-string scale is where the
+author warms up, not where he practices; those get played in triplets at 120–140.
+
+The revised numbers are better, not authoritative. They are one player's ranges
+on one instrument, and they are a **starting point rather than a prescription**.
+Every one of them is overridable per family in configuration — `[pool.<family>]
+tempo`, shown below — and a reader whose hands disagree with the table should
+override it rather than read it as a claim about how fast the exercise ought to
+be played.
+
+The durable answer is not a better default. It is the measurement and logging
+layer §17 defers to v2: once the tool records what was actually played and at
+what tempo, a per-family range is derived from the player's own history instead
+of declared in advance, and the number shipped here stops mattering. Until then
+the default's job is to be a reasonable place to start and easy to change.
 
 Tempo is deliberately **not** a sampled axis. It is a difficulty parameter, and
 letting it vary randomly across sessions would be progressive overload arriving
@@ -1082,14 +1104,16 @@ specification against `plan.md` on 2026-08-09.
 
 ### Resolutions from implementation
 
-Decisions 23–25 were forced by contact with the work rather than by review, and
-are recorded here so the reversals are legible.
+Decisions 23–26 were forced by contact with the work rather than by review, and
+are recorded here so the reversals — and the rules the code adopted beyond what
+the specification asked for — are legible.
 
 | # | Decision | Rationale |
 |---|---|---|
 | 23 | LilyPond is a binary on `PATH`; melete has no runtime Python dependencies. **Supersedes #13.** | The PyPI redistribution has no aarch64 wheel at any version, so `uv sync` fails on both the arm64 container and the Apple Silicon host. Forking cannot fix Linux, since upstream publishes no `linux-arm64` binary. Taking the binary from the system works on both platforms today and cost one line, because `render.py` already isolated it. |
 | 24 | Withdraw the "no change to the base image" claim, and treat the container gap as a Vergil-wide design problem rather than a melete workaround | A repo-specific system package is something Vergil's container model has never had to express — every image is generic and repo-agnostic. Solving it privately inside melete would hide a problem that the next such repository will hit. Filed as `vergil-tooling#2718`. |
 | 25 | The dev dependency group is a contract with `vrg-validate`, not a style choice | Typecheck runs `ty` **and** `mypy`; audit runs `pip-audit` **and** `pip-licenses`. A missing tool fails the stage with `FileNotFoundError`, so the list is discovered by running the pipeline, not by preference. |
+| 26 | `score.py` enforces §6's one-level-nesting rule at runtime: a `Tuplet` rejects any element that is not a `Note`, a `Score` rejects any voice element that is not a `Note` or a `Tuplet`, both raising `TypeError` naming the offending index | §6 states the rule but nothing checked it, and static typing does not close the gap: annotations are erased before any family runs, and families assemble voices dynamically from sampled parameters. A list built by appending in a loop is exactly where a type error slips past mypy. Without the check the failure surfaces as an `AttributeError` inside `emit.py` — far from its cause, in the module §4 keeps deliberately thin. The check is beyond what §6 specifies and was accepted deliberately rather than trimmed back to the letter of the spec. |
 
 ## 17. Deferred to v2
 
