@@ -1,0 +1,92 @@
+MNEMOSYS PROJECT — ORG BANNER IMAGE
+Prompt for ChatGPT / GPT Image. Paste everything below the line.
+
+Rationale, sourcing, and revision guidance: 2026-08-09-banner-image-design.md
+
+────────────────────────────────────────────────────────────────────────
+
+Create a single ultra-wide cinematic banner image.
+
+STYLE AND LIGHT
+Photorealistic, richly detailed cinematic render. Lit like a Gustave Doré
+engraving translated into film: deep storm chiaroscuro, one dramatic
+backlight source, heavy atmosphere, rain-charged air. Serious and
+monumental, never whimsical.
+
+SETTING
+Night on the slope of Mount Helicon under a breaking storm. The location is
+at once an ancient Greek sanctuary and a concert stage — the same structure
+serving both purposes, not one decorating the other.
+
+REAR CENTRE — MNEME
+A colossal bronze cult statue of a woman, deeply oxidized to green verdigris,
+scaled so large she reads as architecture rather than as a person. She holds
+no instrument and is not performing. Water pours continuously from her cupped
+hands, falls down the mountainside, and runs in a stone channel across the
+stage below. A break in the storm backlights her.
+
+THE STAGE
+A long stage built from a wall of stacked amplifier cabinets, their grille
+cloth reading as weathered stone, their corners shod in bronze, stacked like
+ashlar masonry. A winged horse — Pegasus — is carved in relief into the face
+of the cabinets. Thick cables run across the stage floor like vines and roots.
+
+STAGE LEFT — MELETE
+A woman in a chiton with a studded leather belt and a laurel wreath, standing
+on a stone plinth, caught mid-practice and in motion. She is working, not
+performing: brow furrowed, mouth moving as she counts. In front of her a music
+stand holds a printed sheet showing both five-line staff notation and six-line
+tablature. Beside her on the cabinet sit a mechanical pyramid metronome in
+bright polished bronze, and a wax writing tablet with a bronze stylus.
+
+STAGE RIGHT — AOEDE
+A woman mirrored to Melete at exactly the same scale, the same eye level, and
+the same prominence, on an identical stone plinth. She is singing — head back,
+mouth open, mid-note. She holds nothing; one hand is raised in the mano
+cornuta, index and little fingers extended. Behind her stand racks of rolled
+scrolls and handwritten set lists.
+
+Melete and Aoede must read as equals: identical size, identical height,
+symmetrically balanced left and right of the colossus.
+
+INSTRUMENTS
+On stands across the stage, spanning 2,500 years, with no single instrument
+favoured: an ancient Greek kithara, an aulos (double reed pipe), a
+hurdy-gurdy, a Flying V electric guitar, an electric bass, and a theremin,
+plus a drum kit whose shells are bronze gone green. Place the kithara and the
+Flying V side by side so their silhouettes echo one another.
+
+THE WINGS — BRONZE AUTOMATA
+Several small bronze automata attend the rig at both wings: coiling cable,
+holding a sheet of music up to the light, adjusting a microphone stand. They
+are the smallest figures in the frame, unmistakably attendants, and none of
+them touches an instrument or resembles one of the women.
+
+MATERIAL RULE
+Every bronze surface that is handled daily is bright and polished — the
+metronome, the automata's hands, the fretboards, the rim of the spring. Every
+bronze surface that is static or neglected is oxidized deep green.
+
+TEXT (render cleanly, spell exactly)
+- Cut in Roman capitals into the three stone plinths: MNEME beneath the
+  colossus, MELETE beneath the left figure, AOEDE beneath the right figure.
+- Across the front amplifier grille, in heavy blackletter, positioned like a
+  band logo: MNEMOSYS
+- On a weathered sign in the upper right of the frame, two lines:
+  PRACTICE BECOMES MEMORY
+  MEMORY BECOMES SONG
+
+COLOUR
+Dominated by oxidized copper green and deep teal shadow. The only warm light
+is amber ember glow from valve amplifiers and from the storm break behind the
+colossus. Pale marble and bone highlights on skin and stone.
+
+COMPOSITION
+Keep every figure and all text within the central horizontal band of the
+frame. The image will be cropped to a 2.5:1 letterbox.
+
+DO NOT INCLUDE
+No instrument held in anyone's hands. No science-fiction or humanoid robots.
+No skulls, pentagrams, inverted crosses, or fire. No modern LED lighting rig,
+truss, or lasers. No audience or crowd. No text other than that specified
+above.

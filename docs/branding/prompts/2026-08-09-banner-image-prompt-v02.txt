@@ -1,0 +1,128 @@
+MNEMOSYS PROJECT — ORG BANNER IMAGE
+v02 FROM-SCRATCH PROMPT — for a fresh ChatGPT session.
+
+Supersedes 2026-08-09-banner-image-prompt.txt (v01). Two kinds of change:
+  - the five corrections from the v01 assessment, and
+  - the things v01 invented unprompted that were better than what was
+    specified, now written in so they are not lost to chance.
+
+Paste everything below the line.
+
+Rationale and v01 assessment: 2026-08-09-banner-image-design.md §16
+
+────────────────────────────────────────────────────────────────────────
+
+Create a single ultra-wide cinematic banner image, aspect ratio 2.5:1.
+
+STYLE AND LIGHT
+Photorealistic, richly detailed cinematic render. Lit like a Gustave Doré
+engraving translated into film: deep storm chiaroscuro, one dramatic backlight
+source breaking through cloud behind the central figure, heavy rain-charged
+atmosphere with visible falling rain. Serious and monumental, never whimsical.
+
+SETTING
+Night on the slope of Mount Helicon under a breaking storm. The location is at
+once an ancient Greek sanctuary and a concert stage — the same structure
+serving both purposes, not one decorating the other. Ruined temples,
+colonnades and broken terraces climb the mountainside into the dark behind the
+stage. Weathered stone columns frame the extreme left and right edges of the
+image.
+
+REAR CENTRE — MNEME
+A colossal bronze cult statue of a seated woman, wearing a laurel crown,
+deeply oxidized to green verdigris, scaled so large she reads as architecture
+rather than as a person. She holds no instrument and is not performing. Water
+pours continuously from her cupped hands, falls in a bright cascade down the
+rock beneath her, and runs into a stone basin at stage level. A break in the
+storm clouds backlights her with shafts of pale light.
+Her name is carved in weathered Roman capitals into the rock plinth directly
+beneath her: MNEME
+
+THE STAGE
+A long stage built from a wall of stacked amplifier cabinets, their grille
+cloth reading as weathered stone, their corners shod in bronze, stacked like
+ashlar masonry. Warm amber pilot lights glow along the amplifier panels. A
+winged horse — Pegasus — is carved in high relief into the centre face of the
+cabinet wall. Thick cables run across the wet stone stage floor like vines and
+roots.
+
+STAGE LEFT — MELETE
+A living young woman standing on a stone plinth, caught mid-practice and in
+motion. She wears a chiton with a broad studded leather belt and a laurel
+wreath. She is working, not performing: brow furrowed in concentration, eyes
+down, lips parted as she counts a beat under her breath.
+In front of her a music stand holds a printed sheet showing both five-line
+staff notation and six-line tablature. On the amplifier cabinet beside her sit
+a mechanical pyramid metronome in bright polished bronze, and a shallow wooden
+writing tablet filled with dark wax, its surface scratched with rows of
+notation, a bright bronze stylus lying across it.
+Her name is carved in Roman capitals into the face of her plinth: MELETE
+
+STAGE RIGHT — AOEDE
+A living young woman mirrored to Melete at exactly the same scale, the same
+eye level, and the same prominence, on an identical stone plinth. She is
+singing — head back, mouth open, mid-note. She holds nothing; one hand is
+raised above her in the mano cornuta, index and little fingers extended.
+Behind her stand tall racks of rolled scrolls and handwritten set lists, and a
+second music stand.
+Her name is carved in Roman capitals into the face of her plinth: AOEDE
+
+THE TWO WOMEN ARE ALIVE — THIS IS IMPORTANT
+Melete and Aoede must be unmistakably living human beings, not statues and not
+marble: warm skin with real colour in the face, throat and hands, flushed with
+effort, hair damp from the rain, sweat catching the amber light. The colossal
+seated figure behind them is the only statue in the image, and the contrast
+between her weathered metal and their living skin should be immediate and
+obvious.
+They must also read as equals: identical size, identical height, symmetrically
+balanced to left and right of the colossus.
+
+INSTRUMENTS
+Standing on stands across the stage, spanning 2,500 years, with no single
+instrument favoured and none held by anyone: an ancient Greek kithara, an
+aulos (double reed pipe), a hurdy-gurdy, a Flying V electric guitar, an
+electric bass, a theremin, and a drum kit. Place the kithara and the Flying V
+side by side so their silhouettes echo one another.
+
+THE WINGS — BRONZE AUTOMATA
+Bronze automata attend the rig at both wings, clearly visible and standing
+forward on the stage where the amber amplifier light catches their polished
+metal. Each is roughly waist-height relative to the two women. One coils a
+cable, one holds a sheet of music up to the light, one adjusts a microphone
+stand. They are plainly attendants and servants: none stands on a plinth, none
+touches an instrument, and none resembles either woman.
+
+MATERIAL RULE — APPLY THIS VISIBLY
+Bronze is bright where it is handled every day, and green where it is
+neglected.
+Bright polished bronze: the metronome, the stylus, the automata's hands, the
+guitar and bass fretboards worn clean by fingers, the rim of the spring basin.
+Deep green verdigris patina: the colossal statue, the architecture, the
+amplifier fittings, the drum kit shells, and the metal parts of every
+instrument standing untouched on its stand.
+
+TEXT (render cleanly, spell exactly)
+- MNEME — Roman capitals carved into the rock plinth beneath the colossus
+- MELETE — Roman capitals carved into the left-hand plinth
+- AOEDE — Roman capitals carved into the right-hand plinth
+- MNEMOSYS — heavy blackletter across the centre of the amplifier wall,
+  positioned like a band logo
+- On a weathered wooden signboard hanging from a wrought-iron bracket by
+  chains at the upper right of the frame, two lines:
+      PRACTICE BECOMES MEMORY
+      MEMORY BECOMES SONG
+
+COLOUR
+Dominated by oxidized copper green and deep teal shadow. The only warm light
+is amber ember glow from the valve amplifiers and the pale storm break behind
+the colossus. Living skin, bone and weathered stone provide the highlights.
+
+COMPOSITION
+Keep every figure and all text within the central horizontal band of the
+frame.
+
+DO NOT INCLUDE
+No instrument held in anyone's hands. No science-fiction or humanoid robots.
+No skulls, pentagrams, inverted crosses, or fire. No modern LED lighting rig,
+truss, or lasers. No audience or crowd. No text other than that specified
+above.
