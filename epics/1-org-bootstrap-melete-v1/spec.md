@@ -545,10 +545,17 @@ topology expressible; these exercises cannot be described by pitch alone.
 |----------------|----------------------------------------------|
 | `interval`     | 2nd through 10th                             |
 | `context`      | chromatic, or diatonic within root + scale   |
+| `root`         | 12 pitch classes                             |
+| `scale_type`   | as `scales`; **read only when `context` is diatonic** (§10) |
 | `string_skip`  | 0 (adjacent), 1, 2                           |
 | `string_set`   | subsets                                      |
 | `direction`    | up, down, up-down                            |
 | `pattern`      | ascending pairs, descending pairs, alternating |
+
+`root` and `scale_type` are what "diatonic within root + scale" refers to; they
+are axes of this family like any other and its `[pool.intervals]` section
+declares them. `scale_type` is the one axis in the system whose declaration is
+conditional — see §10.
 
 ### Exercise length
 
@@ -740,6 +747,19 @@ for example one `chromatic`, two `scales`, one `arpeggios`, one `intervals` —
 and the selector fills each slot. Leaving the shape unset weights families
 instead.
 
+**A `[pool.<family>]` section that declares no axis is a family opted out of an
+unshaped draw.** With no shape, `family` is itself a weighted axis, and its
+candidates are exactly the families whose pool section configures something.
+Declaring the section *is* the opt-in; omitting it, or leaving it empty, says
+this configuration does not practise that family. If no section declares any
+axis and no shape is declared, there is nothing to draw from and the run stops
+with an error saying so.
+
+Naming a family in `shape` is the other way in, and it takes the other route.
+A family named in the shape whose pool is empty or half-written reaches the
+undeclared-axis error in §10 rather than being quietly dropped here — an
+explicit request is answered, or refused by name, never silently ignored.
+
 ### Validity
 
 Validity is a hard gate, not a weight. Each sampled specification is checked
@@ -795,6 +815,22 @@ stands on the lower fractions.
 The seed derives from the date plus a hash of the configuration and is written
 into `session.json`. Randomness is real but never irreproducible.
 
+#### `[output]` is excluded from the configuration hash
+
+The hash covers `[instrument]`, `[session]` and every `[pool]` section — the
+instrument decides which specifications are valid, `[session]` decides how many
+and of what, and `[pool]` is the candidate set itself. **`[output]` is
+deliberately left out** (decision #42). It selects how a drawn exercise is
+engraved, not which exercises are drawn, so folding it into the hash would fold
+it into the seed and changing `staves` or `key_signatures` would silently hand
+back a different set of exercises.
+
+That exclusion is what makes `--staves` safe to pass on a whim and `--count`
+not: one is presentational and the other moves the draw. Candidate lists keep
+the order they were written in, because a weighted draw walks them in sequence,
+so two pools holding the same values in a different order are two different
+configurations and hash differently.
+
 **A seed alone is not sufficient to reproduce a day, and the design accounts for
 this.** Selection depends on the session log — the weights above are computed
 from how many sessions have passed since each value was last used — and that
@@ -803,45 +839,61 @@ computes different weights than the original run did, because the log has grown
 since. The result would be a different sheet, produced silently, with no
 indication it had diverged.
 
-`session.json` is therefore **self-sufficient for replay**. Alongside the seed
-and the configuration hash it records the resolved weight inputs — the
-`sessions_since` distance per candidate value per axis — that fed that day's
-draw. Replay reads those recorded inputs rather than recomputing from the live
-log:
+`session.json` is therefore **self-sufficient for replay**, and it is so because
+it records **every exercise in full** — the family and every drawn parameter.
+Alongside them it records the seed, the configuration hash, and the resolved
+weight inputs: the `sessions_since` distance per candidate value per axis that
+fed that day's draw.
+
+Those two records do different jobs, and conflating them is the error this
+section previously made. **The recorded exercises are what `replay` reads.** The
+recorded weight inputs are the *account* of why the draw came out as it did —
+what makes a past sheet auditable rather than merely regenerable — and they
+never re-enter `selection.select`.
 
 | Invocation | Behavior |
 |---|---|
 | `melete generate` | Normal generation; computes weights from the current log. |
 | `melete generate --seed <n>` | Same seed against the **current** history. Not a reproduction, and not described as one. |
-| `melete replay <date>` | Exact reproduction from that session's recorded seed and weight inputs. |
+| `melete replay <date>` | Re-engraves the exercises recorded for that day. Nothing is drawn: neither the recorded seed nor the recorded weight inputs is fed back into the selector. |
 
-Separating the two is what makes the guarantee literally true. `--seed` remains
-useful for exploring a draw; `replay` is the operation that reproduces a sheet.
-Recording the weight inputs is a small extension of what §12 already commits
-`session.json` to holding, and it makes any past sheet auditable — not merely
-regenerable — because the inputs that produced it are on disk next to the output.
+Separating `--seed` from `replay` is what makes the guarantee literally true.
+`--seed` fixes the draw against whatever history exists now; `replay` reproduces
+a sheet exactly, because the contents of that sheet are on disk rather than
+re-derived.
 
 #### Replay is read-back, not re-execution
 
 "Self-sufficient for replay" admits two readings, and the difference matters
-enough to state. `melete replay <date>` **reconstructs** the session from the
-exercises, seed and weight inputs recorded in `session.json`. It does **not**
-re-run the selector against the recorded distances and compare the result.
+enough to state. `melete replay <date>` **re-engraves the exercises recorded in
+`session.json`**, running each one back through its family, §8's rhythm
+modifier, the emitter and the renderer — `generate`'s pipeline minus the draw.
+It does **not** re-run the selector against the recorded seed and distances.
 
 Read-back is the correct reading here. The exercises are recorded in full, so
 re-deriving them adds nothing to the reproduction itself, and the injection
 point re-execution would need does not exist in `selection.select`.
 
 **What that means replay does not catch, stated plainly:** a change to the
-selector that would have drawn differently is invisible to it. Re-execution
-would be the stronger guarantee — it would turn replay into a regression test on
-the weighting function — but that is a different feature wearing the same name,
-and building it is a decision for whoever wants that test rather than a gap in
-this one.
+selector that would have drawn differently is invisible to it. The recorded
+exercises come back either way, so a replay that succeeds says nothing about
+whether today's selector would still produce that day. Re-execution would be the
+stronger guarantee — it would turn replay into a regression test on the
+weighting function — but that is a different feature wearing the same name, and
+building it is a decision for whoever wants that test rather than a gap in this
+one.
 
 The ambiguity was found when B14's replay test turned out to pass somewhat
 trivially under the read-back reading, which is the kind of thing a test tells
 you only if you ask what it would have caught.
+
+Two smaller consequences follow from replay reading the record rather than
+re-deriving it. The instrument is checked **by name** and a mismatch is refused,
+because engraving one bass's recorded string indices and frets for another
+produces convincing tablature for the wrong instrument (§5). The tempo ranges
+and the staff mode, being presentational, are read from the configuration as it
+is now, and a configuration hash that no longer matches prints a note saying so
+rather than refusing.
 
 ### Tunability
 
@@ -1016,6 +1068,32 @@ behalf. Defaulting to the full string set silently converts every positional
 exercise into a different exercise. There is no defensible choice among those,
 so the tool declines to make one, and it declines uniformly rather than
 defaulting the easy axes and erroring on the hard one.
+
+The error arrives at the **first draw from that pool** rather than at load,
+because a pool is only incomplete relative to the family that samples it.
+
+#### The one exception: a conditional axis
+
+`scale_type` on `intervals` is read only when the drawn `context` is
+`diatonic` — a chromatic interval sequence never consults it, and two chromatic
+specifications differing only in `scale_type` engrave the same sheet. So it is
+**not sampled at all** in that branch: it does not enter `params`, it is not
+pushed onto §9's history, and the pool is not asked for candidates it will not
+use. A pool whose `contexts` is `["chromatic"]` alone may therefore legally omit
+`scale_types`. Any pool that can draw `diatonic` must still declare it, and the
+omission is caught the first time a diatonic context comes up.
+
+This is the same argument as the rule it excepts, not a softening of it.
+Requiring `scale_types` for a chromatic-only pool would demand configuration
+that changes nothing on the page, and sampling the axis anyway would credit §9's
+coverage accounting with variety that does not exist — pushing a scale type down
+the pool for the next slot without a single note of it being played. The rule
+and the exception both say the pool describes what will actually be drawn from.
+
+`context` is drawn before `scale_type`, which is what makes the condition
+decidable at the moment it is needed. The recorded weight inputs still carry the
+axis, because they record what fed the *draw* including the attempts that were
+rejected.
 
 ### Explicit tunings
 
@@ -1306,19 +1384,44 @@ melete generate --date 2026-08-10
 melete generate --seed 12345     # fixed seed against current history
 melete generate --dry-run        # print selections, render nothing
 melete generate --staves tab     # override staff mode for one run
-melete generate --count 6
+melete generate --count 6        # only when [session] shape is unset
 melete generate --force          # overwrite an existing session directory
 melete generate --split          # also emit one PDF per exercise
-melete replay 2026-08-09         # reproduce a past session exactly
+melete replay 2026-08-09         # re-engrave a past session from its record
 melete show 2026-08-09           # summarize a past session
 melete families                  # list families and their parameter axes
 melete vocabulary                # list every axis and its accepted values
 ```
 
 `replay` and `--seed` are deliberately distinct; see §9 *Determinism*. `replay`
-reconstructs a session from its recorded seed and weight inputs and is the only
-operation that reproduces a sheet exactly. `--seed` fixes the draw against
-whatever history exists now.
+re-engraves the exercises recorded in that day's `session.json` and is the only
+operation that reproduces a sheet exactly. Nothing is re-drawn, and the recorded
+seed and weight inputs are the account of the original draw rather than inputs
+to this one. `--seed` fixes the draw against whatever history exists now.
+
+Three interactions between the flags are not visible in the list above and
+surprise people, so they are stated here.
+
+**`--count` is refused when `[session] shape` is declared.** A shape names one
+family per exercise slot and therefore already fixes the count, so the two
+contradict each other and guessing which the user meant would silently generate
+the wrong session. The error names the count the shape declares. **This includes
+§10's worked example**, which declares a shape of five: `--count 6` against that
+configuration is a refusal, not an override. Edit the shape, or omit it to
+weight the families instead. Unlike `--staves`, `--count` changes the draw,
+because `[session]` is inside the configuration hash the seed derives from (§9).
+
+**`--dry-run` is refused for a date that already has a session directory.** The
+existence check §13 requires runs *before* the draw, so a dry run against an
+already-generated day refuses rather than previewing — even though it would have
+written nothing. `--force` previews it. The ordering is deliberate: the check
+belongs where it can be made before any work happens, and a second copy of it
+after the draw would be a second place to keep the rule.
+
+**The two integer flags are bounded at the flag.** `--seed` must be 0 or
+greater and `--count` 1 or greater, both rejected by the parser naming the flag.
+A negative seed would otherwise reach the log, and a count of zero would ask the
+emitter for a book with no exercises in it.
 
 `vocabulary` prints the canonical registry described in §13 — the same source
 that configuration validation and the cover-page renderer read.
@@ -1328,9 +1431,27 @@ that configuration validation and the cover-page renderer read.
 ```
 sessions/2026-08-09/
   practice.pdf        cover page + exercises, one printable document
-  session.json        every parameter of every selection, plus the seed
-  src/                generated LilyPond source, per exercise and for the book
+  session.json        every parameter of every selection, the seed, and the
+                      weight inputs that fed the draw
+  src/                generated LilyPond source
+    book.ly           the combined document
+    exercise-01.ly    one file per exercise, numbered from 01
+    exercise-02.ly
+    ...
 ```
+
+`--split` adds one PDF per exercise at the top level of the directory, named for
+the same stems as the sources: `exercise-01.pdf`, `exercise-02.pdf`, and so on
+beside `practice.pdf`.
+
+The names are part of the contract, not an implementation detail: a reader
+re-running the engraver by hand after a failed render (§13) needs to know which
+file to run. Sources are written before anything is rendered, and they are
+rendered *in* `src/` with the finished PDFs moved up — the combined document is
+generated under the stem `book` and its PDF lands at the top as `practice.pdf` —
+because a render writes its `.pdf` beside its `.ly` and the printable documents
+belong at the top of the session directory. The renderer may leave its own
+by-products in `src/` as well.
 
 ### The combined document
 
@@ -1365,10 +1486,13 @@ dictionary for every exercise, and the **resolved weight inputs** that produced
 the draw (§9). It is the history the selector reads back. It is human-readable,
 git-committable, and hand-editable.
 
-The weight inputs are what make the file sufficient for exact replay rather than
-merely descriptive of the result. They also make a sheet auditable: the question
-"why did it pick D Dorian three days running?" is answerable from the file
-itself, without re-deriving anything.
+The **parameter dictionaries** are what make the file sufficient for exact
+replay: `replay` re-engraves those exercises, and nothing about the draw is
+recomputed (§9). The **weight inputs** are what make the sheet auditable — the
+question "why did it pick D Dorian three days running?" is answerable from the
+file itself, without re-deriving anything. Recording both means a past day can
+be reproduced *and* explained, which are two different questions with two
+different answers on disk.
 
 ## 13. Error Handling
 
@@ -1378,13 +1502,14 @@ generator becomes a wrong exercise on the page, which is worse than no exercise.
 | Failure | Behavior |
 |---|---|
 | Malformed or invalid configuration | Fail at load, naming the exact key and its accepted values. Never fall back to a default for a misspelled key. |
-| Axis a family reads that its `[pool.*]` section does not declare | Hard error at the first draw from that pool, naming both the axis and the section to declare it under. Never defaulted — an absent key gets the same treatment as a misspelled one, for the reasons in §10. |
+| Axis a family reads that its `[pool.*]` section does not declare | Hard error at the first draw from that pool, naming both the axis and the section to declare it under. Never defaulted — an absent key gets the same treatment as a misspelled one, for the reasons in §10. A conditional axis is exempt while its condition does not hold: see §10, *The one exception*. |
 | Explicit tuning not strictly ascending | Fail at load, naming the offending index. Never re-sort — sorting would shift every string index and engrave the wrong instrument convincingly. |
 | Pool over-constrained | Hard error naming the axis that could not be satisfied — for example, "no valid `string_set` for `bass4` with `octaves = 3`". |
 | Family emits a note outside the fretboard | A bug, not user error. Raise. |
 | LilyPond render fails | Surface LilyPond's stderr verbatim and **keep the generated `.ly` on disk** for inspection and manual re-run. Never clean up on failure. |
 | LilyPond binary missing | Explicit error stating the resolution, not a stack trace. |
-| Session directory exists | **Refuse.** `--force` overwrites and must be asked for explicitly. |
+| Session directory exists | **Refuse.** `--force` overwrites and must be asked for explicitly. The check precedes the draw, so `--dry-run` is refused too (§11). |
+| No `[pool.<family>]` section declares any axis, and no shape is declared | Hard error: there is nothing to draw from. §9's unshaped draw weights the families a pool section opts in. |
 | Corrupt session-history entry | Hard error naming the file. Silently skipping a bad entry would degrade variety invisibly. |
 
 ### The vocabulary registry
@@ -1525,9 +1650,15 @@ None of this needs LilyPond. Spelling is testable as pure data, which is why
 
 Generate a session; append several later sessions to the log; then `melete
 replay` the original date and assert the result is **byte-identical** to the
-first run. This is the test that proves §9's reproducibility guarantee holds
-against a log that has moved on, and it is the reason the weight inputs are
-recorded rather than recomputed.
+first run. This proves §9's reproducibility guarantee holds against a log that
+has moved on: a re-derivation would not survive it, because the weights are
+computed from a history that has grown.
+
+**What this test does not prove is worth stating beside it.** Replay reads the
+recorded exercises rather than re-drawing them (§9), so the assertion passes
+whatever the selector currently does. It is a test of the engraving pipeline's
+determinism and of the record's completeness, not of the weighting function. The
+selection test above is what covers the draw.
 
 ## 15. Repository and Vergil Integration
 
@@ -1701,9 +1832,50 @@ requests, and joblib into a sheet-music renderer. Rejected.
 ### Standard Vergil scaffolding
 
 `.claude/hooks/guard.sh`, `.claude/settings.json` enabling the plugin,
-`docs/repository-standards.md`, `.github/workflows/ci.yml` invoking
-`standards-compliance`, `.worktrees/` gitignored, and the parallel-agent
-worktree section in `CLAUDE.md`.
+`docs/repository-standards.md`, `.github/workflows/ci.yml`, `.worktrees/`
+gitignored, and the parallel-agent worktree section in `CLAUDE.md`.
+
+`ci.yml` composes the shared `vergil-actions` reusable workflows at `@v2.1` —
+`ci-audit`, `ci-quality`, `ci-security`, `ci-test` and `ci-version-bump` — and
+declares no jobs of its own. What that produces is twelve required status
+contexts on `develop`:
+
+```text
+quality / common               security / codeql        CodeQL
+quality / lint / 3.14          security / semgrep       Semgrep OSS
+quality / typecheck / 3.14     security / trivy         Trivy
+test / unit / 3.14             version / version-bump
+audit / dependencies / 3.14
+```
+
+The `matrix` and `evidence` jobs each shared workflow also emits run on every PR
+and are **not** required. Melete's own
+[`docs/repository-standards.md`](https://github.com/mnemosys-project/melete/blob/develop/docs/repository-standards.md)
+carries this list, read from the branch's actual required contexts rather than
+inferred from the workflow file, and is the place to look when it changes.
+
+> **Corrected 2026-08-11.** This paragraph previously said `ci.yml` invokes
+> `standards-compliance`. **It never has.** No such context appears among the
+> required checks, among the seven further contexts that run unrequired, or as a
+> job in the workflow. Sibling repositories document gates like `repo-profile`
+> and `commit-lint`; melete has never had those either. The sentence was written
+> as a description of scaffolding melete would receive and was never checked
+> against the repository once it existed. Whether those gates are wanted here is
+> a real question and a separate piece of work, filed as
+> [`melete#79`](https://github.com/mnemosys-project/melete/issues/79) rather
+> than left standing in this section as though it were already true.
+
+Two hard gates are local rather than CI: branch-name validation and
+Conventional Commits linting, both installed git hooks enforced through
+`vrg-commit`. The agent session gate is `.claude/hooks/guard.sh`, a `PreToolUse`
+hook that denies raw `git` and `gh` even when `vergil-tooling` is absent, so the
+policy cannot be bypassed by an incomplete environment.
+
+**`vrg-github-repo-config audit` does not evaluate rulesets**, and reported this
+repository compliant throughout the bootstrap epic while the ruleset required a
+context CI could not emit — the defect behind the `integration-tests` deviation
+recorded in the plan. The required-check list above is therefore read from the
+ruleset, not from a tool that reports compliance.
 
 ## 16. Recorded Decisions
 
@@ -1852,6 +2024,21 @@ epic decided in code, or in an issue, without writing it into the specification
 | 40 | `replay` is read-back, not re-execution, and the limit is stated rather than left to be discovered | Decision #14 called `session.json` "self-sufficient for replay" without saying which of the two operations it meant. Read-back is what shipped and what is correct here — the exercises are recorded in full, so re-deriving them adds nothing to the reproduction, and the injection point re-execution needs does not exist in `selection.select`. The cost is that a selector change which would have drawn differently is invisible to replay. That is a real gap in what the test proves, and stating it is the difference between a known boundary and a guarantee quietly weaker than its name. See §9, *Replay is read-back, not re-execution*. |
 | 41 | Mark the renderer boundary in the specification rather than leaving it implicit in the module layout, and delete none of the LilyPond material | The renderer is being replaced (`melete#71`) and nearly everything else in this design outlives it — but that was legible only to a reader who already knew which modules imported which. §4's *The renderer boundary* makes it explicit in both directions, and it corrects the "blast door" claim, which is true of a change of *distribution* and false of a change of *renderer*: `render.py` isolates the binary while `emit.py` isolates the syntax, and the second is the larger. The LilyPond-specific material is kept and labelled rather than removed, because it is the record of what was learned — the seven constructs, the string-numbering inversion, the `TabStaff` defaults, the octave trap in #39, and the finding that golden-file tests pin generated text rather than its correctness. A migration that has to rediscover all of that pays for this epic twice. |
 
+### Resolution from the reference-documentation sweep
+
+Decision 42 was recorded on 2026-08-11, after melete's CLI and configuration
+references were written **from the source** and found seven places where this
+specification described behaviour the code does not have. All but one were
+corrections to prose — a stale sentence, an example that does not run, a rule
+stated more strongly than the code enforces it — and are recorded in the
+sections they belong to rather than here. One was a real design choice that had
+been made in code and written down nowhere, which is what the decision table is
+for.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 42 | `[output]` is excluded from the configuration hash the seed derives from | The hash exists so that a day re-generated after the pool was edited is a different draw rather than the same one against a pool that no longer means the same thing. `[output]` does not move the draw — it chooses how a drawn exercise is engraved — so folding it in would make `staves = "tab"` hand back a *different set of exercises*, silently, from a key that a reader would reasonably expect to be presentational. That is the same class of failure as the octave in #39 and the spelling in #27: an output-side setting reaching back into correctness with nothing declaring that it does. It is also what makes §11's two overrides behave differently and defensibly — `--staves` cannot change what you practise and `--count` can, because `[session]` *is* in the hash. The choice was load-bearing and was recorded only as a comment in `session._fingerprint`, so a future edit adding "just one more field" to the fingerprint had nothing to read. |
+
 ## 17. Deferred to v2
 
 The following are explicitly planned but out of scope, and the v1 design leaves
@@ -1883,7 +2070,10 @@ room for each:
 [`mnemosys-project/.github#1`](https://github.com/mnemosys-project/.github/issues/1)
 on 2026-08-09. **Delivered**: melete v1 shipped, was deployed to the author's
 host and validated on printed paper (`melete#19`, `melete#20`). Reviewed and
-amended by this epic's closing documentation sweep on 2026-08-11.
+amended by this epic's closing documentation sweep on 2026-08-11, and corrected
+again the same day against melete's source when its CLI and configuration
+references were written from the code (`melete#75`, `melete#76`; corrections in
+`.github#44`).
 
 The renderer this specification describes is being replaced; §4, *The renderer
 boundary*, says what that reaches and what it does not. Everything outside that

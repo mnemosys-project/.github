@@ -2706,3 +2706,42 @@ are in the order they were written, which is roughly chronological.
   code. Recorded here because the general point is not about these five files:
   **documentation that mirrors a decision does not move when the decision
   does**, and the only thing that finds it is a sweep whose job is to look.
+
+- **Writing melete's reference documentation from the source turned out to be a
+  spec audit, and it found seven more.** `melete#75` and `melete#76` produced
+  the CLI reference, the configuration reference and the repository standards
+  page by reading `cli.py`, `selection.py`, `config.py`, `session.py`,
+  `vergil.toml` and `ci.yml` rather than by reading the spec. That is why they
+  found what the review above did not: a document written from the code has to
+  reconcile with it line by line, and every place the two disagreed was a place
+  the spec was stale. The corrections landed in `.github#44`.
+
+  The seven are one failure repeated, which is why they are one entry rather
+  than seven: **the spec stated an intention in the present tense and nothing
+  checked it later.** §9 and §11 described `replay` as re-execution "from that
+  session's recorded seed and weight inputs" — the code reads back the recorded
+  exercises and never re-enters the selector, which decision #40 had already
+  recorded while the surrounding prose still said otherwise. §11's own
+  illustrative `--count 6` is refused against §10's own example configuration,
+  because a declared shape already fixes the count. §10's undeclared-axis rule
+  was stated without the conditional-axis exception the selector actually
+  implements. The pool opt-in rule, the `--dry-run` refusal on an existing
+  directory, the flag bounds, the contents of `src/`, and the exclusion of
+  `[output]` from the configuration hash existed only in code. And §15 asserted
+  a `standards-compliance` CI gate melete has never had.
+
+  Two things are worth carrying forward from that. The first is the shape of the
+  failure: an intention written as a description reads identically to a fact,
+  and nothing downstream can tell them apart — the same hazard as the boundary
+  in decision #38 and the aspiration in §15, and it is invisible to every test,
+  because none of it is in the code. The second is the remedy that happened to
+  work, which was cheap and was not designed as an audit: **reference
+  documentation written from the source is a spec audit in disguise.** The
+  bookend review caught the documents that mirror decisions; this caught the
+  document that mirrors behaviour, and only writing prose against the code
+  could have.
+
+  One of the seven was a design choice rather than a stale sentence and is now
+  decision #42. The `standards-compliance` gate is filed as `melete#79` rather
+  than corrected into existence — if those gates are wanted that is a piece of
+  work, and asserting them in a spec is how this got here in the first place.
