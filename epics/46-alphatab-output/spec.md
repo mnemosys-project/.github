@@ -227,9 +227,10 @@ liability.
   `package.json` pinning alphaTab, and a README declaring it extraction-bound
   debt. Python reaches it only through the process boundary — never imports,
   never patches internals — so extraction later is a one-line invocation change.
-  A follow-on issue tracks extracting it to its own TypeScript-engineered repo
-  once Vergil supports TypeScript (a parallel initiative); cross-org linking is
-  out of scope, so that dependency is recorded in prose.
+  The **extraction disposition** — defer, expand into a follow-on epic, or drop —
+  is owned by the follow-on brainstorm bookend (melete#82), decided before the
+  retrospective; cross-org linking to the Vergil TypeScript initiative is out of
+  scope, so that dependency is recorded in prose.
 - **Name:** `melete-render` / "the renderer" is a working name, to be revisited.
   It pairs with the Python "emitter" (emit → render).
 - **Errors (blast-door contract, as `render.py` today):** on failure, keep the
@@ -312,15 +313,18 @@ Implementation tasks (filed from the plan; each ≈ one PR), in dependency order
 - Documentation-review (closing bookend) — melete#81.
 - Retrospective (terminal bookend) — `.github#48`.
 - Fix `CLAUDE.md` de-pollution — melete#83.
-- Follow-on brainstorm: tapping family (Epic 2) — melete#82.
+- Follow-on brainstorm (tapping family + `melete-render` extraction disposition;
+  the tapping work becomes the *next* epic, minted when that brainstorm runs) —
+  melete#82.
 
-**Follow-on issue (not gating this epic):** extract `melete-render` to its own
-TypeScript-engineered repo, dependent on the Vergil TypeScript-support
-initiative.
+**`melete-render` extraction disposition:** owned by the follow-on brainstorm
+bookend (melete#82) — defer / expand into a follow-on epic / drop — decided
+before the retrospective, dependent on the Vergil TypeScript-support initiative.
 
-A cold-rebuild **validation** task may be added at plan time to prove the new
-container capability end-to-end (Node + alphaTab present; `.gp` generation
-works), blocked-by the relevant implementation tasks.
+**Cold-rebuild validation:** a `validation` task is filed (blocked-by Tasks 2 and
+8) to prove the new container capability on a fresh image end-to-end — Node +
+alphaTab present and `generate` produces a valid `.gp` — catching image-build
+regressions CI's cached layers can hide.
 
 ## 11. Risks, assumptions, open questions
 
