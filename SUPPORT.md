@@ -17,18 +17,20 @@
 | Topic | Repository |
 | --- | --- |
 | Naming convention, org metadata, epics, community health files | [.github](https://github.com/mnemosys-project/.github) |
-| The organization site | `docs` — not yet created |
-| Practice exercise generation, LilyPond output, instrument profiles | `melete` — not yet created |
+| The organization site | [docs](https://github.com/mnemosys-project/docs) |
+| Exercise generation, instrument profiles, notation and tablature output | [melete](https://github.com/mnemosys-project/melete) |
 
 If you are unsure, open it against
 [.github](https://github.com/mnemosys-project/.github/issues) and it will be
 routed or moved.
 
-While `melete` does not yet exist as a repository, its design is public and
-reviewable: see
-[the epic #1 specification](https://github.com/mnemosys-project/.github/tree/develop/epics/1-org-bootstrap-melete-v1).
-Comments on the design are best raised on
-[epic #1](https://github.com/mnemosys-project/.github/issues/1) itself.
+`melete`'s design is public and reviewable in
+[the epic #1 specification](https://github.com/mnemosys-project/.github/tree/develop/epics/1-org-bootstrap-melete-v1),
+which is the authoritative design document for the tool. Comments on the design
+are best raised on
+[epic #1](https://github.com/mnemosys-project/.github/issues/1) itself; bugs and
+requests about the shipped tool belong in
+[`melete`](https://github.com/mnemosys-project/melete/issues).
 
 ## Expectations
 

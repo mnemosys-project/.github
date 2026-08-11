@@ -12,11 +12,12 @@ That scheme is not decorative and it is not optional — read
 | Repository | Purpose |
 | --- | --- |
 | [.github](https://github.com/mnemosys-project/.github) | Org metadata, community health files, the naming convention, and the home for all epics |
-| `docs` | The organization site. Not yet created. |
-| `melete` | Practice exercise generator. Not yet created. |
+| [docs](https://github.com/mnemosys-project/docs) | The organization site |
+| [melete](https://github.com/mnemosys-project/melete) | Practice exercise generator |
 
-The organization is new. Repositories appear as the bootstrap epic delivers
-them, and this table is updated when they do.
+All three were delivered by epic
+[#1](https://github.com/mnemosys-project/.github/issues/1). New repositories are
+added to this table as they appear.
 
 ## Work is tracked as epics and tasks
 
