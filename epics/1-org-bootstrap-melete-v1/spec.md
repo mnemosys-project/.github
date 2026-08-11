@@ -120,8 +120,10 @@ Inherited from MNEMOSYS:
 - The principle that exercises are abstract and instruments are configurations
 - Deterministic, explainable generation
 
-Explicitly not inherited: the database, the API, the container and cloud
-infrastructure, the fatigue and mastery state model.
+Explicitly not inherited: the database, the API, and the container and cloud
+infrastructure. Those are refused, and the refusal is the reason this project
+exists. The fatigue and mastery state model is also absent from v1, but that is
+an ordering rather than a refusal — §17 defers it.
 
 ## 2. Name and Lineage
 
@@ -157,15 +159,42 @@ Both names are available on PyPI as of 2026-08-09. `mneme`, `euterpe`, and
 
 ### Non-goals
 
-These are excluded deliberately, not overlooked:
+These are excluded deliberately, not overlooked. They are excluded for two
+different reasons, and the difference is stated rather than left to the reader,
+because a refusal and an ordering are not the same commitment.
+
+#### Permanently out of scope
+
+- **Database, server, API, web UI.** These are what the predecessor project
+  became before it was set aside (§1). Melete's entire state is a directory of
+  files on the author's machine, and there is no version of this design in
+  which a service appears. Refusing them is the point of the tool.
+- **GUI.** The configuration file is the interface.
+- **Repertoire management.** That is `aoede` (§2) — a separate tool under the
+  same organization, not a feature this one grows.
+
+#### Outside v1, deliberately not ruled out
+
+Each of these has a home in §17, which says what would have to exist first.
 
 - **Progression, overload advancement, mastery estimates, rolling volume,
-  fatigue budgeting** — deferred to v2
-- **Practice logging, note-taking, outcome recording** — deferred to v2
-- **Database, server, API, web UI** — permanently out of scope for this tool
-- **Audio, MIDI, playback**
-- **Repertoire management** — that is `aoede`
-- **GUI** — the configuration file is the interface
+  fatigue budgeting**
+- **Practice logging, note-taking, outcome recording**
+- **Audio, MIDI, playback, recording a performance and scoring it**
+
+The last is the one most easily mistaken for a permanent exclusion, so the
+reasoning is stated here. The domain is retention, and the hard problem is
+decay rather than acquisition. Decay is entirely self-reported: the author
+writes down that a scale was played at 140, nothing verifies it, and "played at
+140" says nothing about how well. The long-term direction is for the exercises
+to be played, recorded, and scored objectively — how accurately was that scale
+played at that tempo, and is that accuracy decaying. That is the retention
+thesis made measurable rather than asserted.
+
+Nothing in v1 implements any of it, and nothing here is a commitment to a
+schedule. What it does rule out is designing as though the capability can never
+exist, since it is the one thing that would make the tool's central claim
+testable.
 
 ### Audience
 
@@ -1673,6 +1702,19 @@ and a tracked revisit, rather than a rule anyone believes is complete.
 | 36 | Bound the reach of every traversal with `[session] max_fret_span`, default 12, through §9's existing validity gate | Nothing checked that a hand could get to a note the fretboard contained, and the first sheet held spans of 15 and 17 frets that nothing had decided were acceptable. Decision #17 added `max_notes` through the same machinery for the same class of problem — a specification that is legal but not useful — so this is a third predicate rather than a new concept. Twelve is one octave of neck, looser than a position on purpose: deliberate shifting is legitimate, and chromatic with `shift = fret_per_cycle` spans nine under §10's pool and must keep drawing. Past twelve an exercise covers more than the neck's own repeating unit and contains a repetition of itself. |
 | 37 | **Provisional.** Span is measured between the lowest and highest *fretted* notes; open strings are excluded. Revisit tracked as `mnemosys-project/melete#60` | The justification is real: fret 0 sounds while the fretting hand stays put, and without the exclusion the open-A minor pentatonic box — open A against frets 3, 5 and 7 — is refused as a seven-fret stretch, when it is one of the most standard shapes on the instrument. But the rule is blunt and known to be blunt. It cannot distinguish an open string at the bottom of a low shape, where a three-note-per-string scale starting open is one position and entirely reasonable, from an open string interleaved with a hand high on the neck — playable, but a different kind of awkward the bound is not measuring. Accepted as a temporary simplification to get control of the span problem, to be revisited once there is experience of how the exercises play. Recorded so a future reader can tell this was a knowing simplification with a named limit, not a rule believed to be complete. |
 
+### Resolutions from the scope-boundary review
+
+Decision 38 was recorded on 2026-08-11, after §3's non-goals list was found to
+be deciding an open design question by accident. It is recorded as a decision
+rather than as prose in §3 because the specific correction is only half of it:
+the general rule about boundaries stated more firmly than they were reasoned
+has nowhere else to live, and a reader hitting the next such boundary needs the
+rule, not the instance.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 38 | Split §3's non-goals into permanent exclusions and deferrals, and move audio, MIDI, playback and performance scoring from the first into the second | The two were one list ending in the sentence that made the database, server, API and web UI *permanently* out of scope, so audio inherited a permanence nobody had ever argued for. The refusal of the service infrastructure is the point of the project and is left firm. Audio is a different case: it is the input side of the retention thesis, which is the one claim the spec makes that nothing in v1 tests — decay is self-reported, and "played at 140" says nothing about how well. The correction was forced by a live decision rather than by tidiness. `mnemosys-project/melete#69` chooses between emitting written pitches under a plain clef and sounding pitches under an octavated clef, and sounding pitches are what an audio or MIDI comparison would need; under §3 as written that argument counted for nothing, because the capability was banned. A scope boundary stated more strongly than its reasoning supports does not sit inert — it quietly makes downstream decisions on the strength of an adjective, and this one already had. |
+
 ## 17. Deferred to v2
 
 The following are explicitly planned but out of scope, and the v1 design leaves
@@ -1684,7 +1726,16 @@ room for each:
 - **Progression and progressive overload.** Tempo and complexity advancing over
   time. Requires the logging layer first; the session log is its substrate.
 - **Measurement dimensions.** Mastery estimation, rolling volume, fatigue
-  budgeting — the full MNEMOSYS state model.
+  budgeting — the full MNEMOSYS state model. Every one of these needs a measure
+  of how well an exercise was played, and the logging layer above supplies only
+  what the author reports.
+- **Performance capture.** Audio and MIDI input, playback, and scoring a
+  recorded performance against the exercise that produced it. This is the input
+  side of the measurement dimensions: "how well did you play it" is the question
+  a mastery estimate is an answer to, and an honour-system log is a weak source
+  for it. Recorded as a direction rather than a plan — the point is that the v1
+  architecture should not be built in a way that forecloses it, which is why §3
+  lists it as deferred rather than excluded.
 - **Additional families.** Voice-led arpeggios (A3), grouping-based patterns
   (P3), legato mechanics (T5), and others from the canonical library.
 - **`aoede`** — repertoire management, descended from the MNEMOSYS RPM design.
