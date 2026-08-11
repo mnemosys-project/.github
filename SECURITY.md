@@ -16,23 +16,26 @@ the subject line "Mnemosys Security Report".
 | Component | Status |
 | --- | --- |
 | `.github` — org metadata, epics, community health files | In scope |
-| `docs` — the organization site | In scope once created |
-| `melete` — practice exercise generator | In scope once created |
+| `docs` — the organization site | In scope |
+| `melete` — practice exercise generator | In scope |
 
 `melete` is a local command-line tool that reads a configuration file and writes
 PDFs. It has no network surface, no server, no database, and no authentication.
 It embeds no model and calls no inference endpoint. The realistic security
 surface is therefore small and mostly concerns input handling: a malformed
-configuration file, a crafted session log, or the behaviour of the bundled
-LilyPond binary when handed generated input.
+configuration file, a crafted session log, or the behaviour of the external
+rendering binary when handed generated input.
 
 Reports in those areas are welcome and will be taken seriously.
 
 ## Out of scope
 
 - Vulnerabilities in upstream dependencies — report those to the upstream
-  maintainer. The one runtime dependency is the PyPI `lilypond` redistribution,
-  which packages the LilyPond binary.
+  maintainer. `melete` has **no runtime Python dependencies**. It shells out to
+  a rendering binary installed on the host or in the container — LilyPond
+  today, though that renderer is being replaced (see epic #1 spec §4, *The
+  renderer boundary*). Vulnerabilities in that binary belong to its
+  maintainers.
 - Vulnerabilities in GitHub, Docker, or other third-party platforms.
 - Social engineering against contributors.
 

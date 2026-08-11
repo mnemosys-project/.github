@@ -46,7 +46,11 @@ verbatim from the spec.
 - **Fret counts are part of the profile definition:** `bass4` = 20, `bass5` = 24,
   `bass6` = 24 (spec §5, decision #18). Never inferred.
 - **`bass6` is the default profile** (spec §5).
-- **No key signatures by default** — explicit accidentals throughout (spec §10).
+- **Key signatures on by default**, and notes spelled for the key (spec §10,
+  §10a, decision #27, which supersedes #9). This constraint originally read "no
+  key signatures by default — explicit accidentals throughout"; that was
+  decision #9, and it was reverted mid-epic when it turned out to be a missing
+  spelling layer rather than a notation preference. Phase S is the work.
 - **All parameter identifiers come from `vocabulary.py`** (spec §13,
   decision #19). No module hardcodes an identifier string.
 - **Tempo is a per-family default, overridable in config, never sampled**
@@ -2360,6 +2364,13 @@ failure the task stays open and the epic stays open.
 | — | Documentation review (#3) | `.github` | all above |
 | — | Retrospective (#4) | `.github` | #3 |
 
+**Two of these twenty-eight tasks are renderer-specific: B12 and B13.** Phase S's
+S3 is partly so — it is the spelling model meeting the emitter, and the model
+itself is S1 and S2. Everything else in the table survives the renderer change
+described in spec §4, *The renderer boundary*. The ratio is the plan's own
+evidence for decision #5, and it is what makes the migration a bounded piece of
+work rather than a second epic's worth of rewriting.
+
 B1/B2 and B13 have no dependency on each other and can run in parallel. B5 and
 B6 are independent once B4 lands; B6a extracts their shared helpers afterwards,
 so B7 and B8 follow it rather than racing it. Extracting on the second
@@ -2394,6 +2405,11 @@ against.
 
 ## Evolution during execution
 
+Appended as the epic runs, one entry per deviation. This is the source for the
+retrospective's §1 — see
+[`docs/epic-document-formats.md`](../../docs/epic-document-formats.md). Entries
+are in the order they were written, which is roughly chronological.
+
 - **Decision #9 was reverted, and the reversal changed the shape of the system
   rather than a setting.** The emitter spelled every note from an all-flats
   table, so F♯ Dorian engraved as G♭ A♭ B𝄫 C♭ D♭ E𝄫 F♭ — a different key, with
@@ -2417,9 +2433,6 @@ against.
   B8 are built, so the arpeggios and intervals families set `key` from the start.
   Building them first would have meant retrofitting four families instead of
   two.
-
-Appended as the epic runs. This is the source for the retrospective's §1 —
-see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
 
 - **A3 inserted; the former A3 and A4 renumbered to A4 and A5.** Banner image
   work produced in a separate session during bootstrap was sitting outside
@@ -2515,7 +2528,7 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
 
 - **B3's sketch listed 11 scale types where `theory` defines 27, and would have
   failed its own drift-guard test.** The task sketch in this plan enumerated a
-  short list while §7 specifies roughly twenty-eight, so an implementer following
+  short list while §7 specifies twenty-seven, so an implementer following
   the sketch literally would have built a vocabulary registry that disagreed with
   the theory module — the precise disagreement B3's drift guard exists to catch.
   The implementing agent found it before writing the test. That is the drift
@@ -2598,3 +2611,98 @@ see [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md).
   The span bound rejects more draws than the profile checks alone, so B10's
   retry-budget sizing was re-measured rather than assumed to still hold. It
   stands at 500.
+
+- **The same printed sheet exposed a second defect, and it was worse: every
+  exercise had been engraved two octaves above its sound for the whole of
+  Phase B.** `emit.py` transposed each note up an octave to get the printed
+  pitch, and also wrote `\clef "bass_8"` — which *performs* a transposition
+  rather than describing one. The octave was applied twice. The tablature was
+  correct throughout, so the two staves disagreed silently, in exactly the shape
+  the spelling bug had taken two days earlier.
+
+  2,700 tests at 100% branch coverage passed over it. They could not have done
+  otherwise: golden-file tests assert the emitted **text**, and the emitted text
+  was precisely what the emitter intended to write. The defect was in what
+  LilyPond would *do* with that text, which no assertion on the string can
+  reach. It was found by rendering a page and looking at it, as `melete#57` was.
+
+  Filed as `melete#58` — which also asked for clef *selection*, since a
+  legitimately high exercise needs a clef that suits it — and fixed in
+  `melete#66`. Melete now owns the octave: it writes the printed pitch, and the
+  clef is a plain `bass` or `treble` chosen per exercise by counting ledger
+  lines. `melete#69` proposed the opposite convention (sounding pitch under an
+  octavated clef, letting the renderer own it) and is closed unbuilt because the
+  module is being replaced.
+
+  The general rule outlives both the bug and the renderer, and is recorded as
+  decision #39: **an octave transposition must have exactly one owner, and which
+  one it is must be written down.** When the application and the renderer can
+  both apply it and neither declares that it does, the failure is silent and the
+  output looks plausible.
+
+- **The container gap closed at the toolchain level instead of inside melete,
+  and that is decision #24 paying out.** #24 refused to solve the missing system
+  package privately, on the grounds that the next repository would hit the same
+  wall. `vergil-tooling#2718` answered with a declarative
+  `[container].system-packages` facility, adopted in `melete#51`; the dev and CI
+  containers now carry Debian's LilyPond 2.24.4 with no bespoke image. The
+  consequence for the epic is that `melete#21` — publishing our own aarch64
+  wheels — was closed **won't-do** rather than done: the need it existed to meet
+  had been removed, and a self-maintained fork of the PyPI redistribution would
+  have pinned us to a development snapshot. Spec §15 carries both outcomes.
+
+- **`integration-tests` stayed off, and the second precondition turned out not
+  to have cleared.** `melete#52` was opened to flip the flag once both blockers
+  closed. Investigating it found that only one had. `vergil-tooling#2720` was
+  closed by adding a *cross-check* that fails loudly when a ruleset requires a
+  status context CI cannot emit — a guard that detects the mismatch without
+  resolving it. The shared `ci-test.yml` still defines no integration job, so
+  flipping the flag would have reproduced the unmergeable-with-everything-green
+  state `melete#23` fixed. What kept the cost low is that the tests were never
+  actually skipped: `addopts` deselects no markers, so all three
+  `@pytest.mark.integration` tests already run under `test / unit`. The emitting
+  job is owed by `vergil-tooling#2721`. `melete#64` corrected the misleading
+  comment in `vergil.toml` and left the flag alone.
+
+- **The renderer is being replaced, and the epic is closing at that milestone
+  rather than absorbing the migration.** The trigger was not a defect. It was
+  the author's assessment that LilyPond cannot express the guitar- and
+  bass-specific annotations this project will need — bends, slides, hammer-ons,
+  harmonics, slap and pop, palm muting — none of which v1 exercises, and which
+  the evaluation is careful to record as **untested rather than confirmed**.
+
+  Four documents came out of it, and they are the epic's handover to the
+  migration: `melete#71` (what LilyPond cost, where it falls short, and the nine
+  requirements any successor must meet), plus three reports now in melete's
+  `docs/reports/` — the LilyPond-versus-Guitar-Pro annotation gap (`melete#70`),
+  Guitar Pro 8 generation feasibility (`melete#72`), and the display-target and
+  open-source viability survey (`melete#73`), which converges on alphaTab.
+
+  Two findings from #71 are worth carrying into this log rather than leaving in
+  the issue. The first is that the cost of LilyPond was never engraving quality,
+  which is good; it was **distribution, semantics and verification** — one
+  dependency forced a platform-infrastructure change on the whole toolchain, and
+  the interface being generated text meant the only real verification was a
+  person looking at a rendered page. Both defects that mattered this epic were
+  found that way. The second is that replacement is **bounded**: roughly 210
+  statements across `emit.py` and `render.py` plus the golden files, with every
+  other module renderer-agnostic. That is decision #5's containment argument
+  paying out a third time, and for the reason it was originally made.
+
+  Spec §4 now carries *The renderer boundary*, which states in both directions
+  what the change reaches, and corrects the "blast door" claim — true of a
+  change of distribution, false of a change of renderer.
+
+- **This documentation review found the epic's own documents behind its code in
+  five specific ways, which is the argument for the bookend existing.** The
+  Global Constraints above still required "no key signatures by default", a
+  setting reverted mid-epic by decision #27. The community health files still
+  said the `docs` and `melete` repositories had not been created, and
+  `SECURITY.md` still named the PyPI `lilypond` redistribution as melete's one
+  runtime dependency — removed by decision #23 the day after it was written.
+  `NAMING.md` cited a design document that had been retired in `melete#32`, and
+  named the renderer in the organization's most permanent table. None of these
+  were noticed by any task that touched the code, because none of them is in the
+  code. Recorded here because the general point is not about these five files:
+  **documentation that mirrors a decision does not move when the decision
+  does**, and the only thing that finds it is a sweep whose job is to look.

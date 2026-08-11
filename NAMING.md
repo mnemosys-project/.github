@@ -58,7 +58,7 @@ Olympians for tools the triad does not cover.
 
 | Name | Pronunciation | Tool | Status |
 | --- | --- | --- | --- |
-| **`melete`** | MEL-uh-tee | Practice exercise generator. Parameterized generation of bass exercises rendered to notation and tablature via LilyPond. | **Assigned** 2026-08-09 |
+| **`melete`** | MEL-uh-tee | Practice exercise generator. Parameterized generation of bass exercises rendered to notation and tablature. | **Assigned** 2026-08-09 |
 | **`aoede`** | ay-EE-dee | Repertoire management. Acquisition, decay modeling, and maintenance scheduling for learned material. Descends from the MNEMOSYS RPM design. | **Reserved** 2026-08-09 |
 
 `mneme` is conceptually the organization itself and is **not** available on
@@ -135,5 +135,13 @@ Thelxinoe, Aoede, Arche, and Melete. Two overlap the Boeotian triad.
   descend from the same conceptual root as Mnemosyne.
 
 The naming rationale is also recorded in melete's design specification
-(`2026-08-09-melete-design.md`, §2 Name and Lineage) and as decision #1 in that
-document's decision table. **This file is the authoritative version.**
+([`epics/1-org-bootstrap-melete-v1/spec.md`](epics/1-org-bootstrap-melete-v1/spec.md),
+§2 Name and Lineage) and as decision #1 in that document's decision table.
+**This file is the authoritative version.**
+
+A note on what this table does *not* record: the tool a name is assigned to is
+described by what it produces, never by the library that produces it. An earlier
+version of melete's row named LilyPond as the renderer, which put a replaceable
+implementation choice in the organization's most permanent document. The
+renderer is now being replaced (epic #1 spec §4, *The renderer boundary*) and the
+row needed no change.

@@ -92,7 +92,7 @@ over intact. Everything else was thrown away.
 
 | Tool | Say it | Status | What it does |
 | --- | --- | --- | --- |
-| **`melete`** | MEL-uh-tee | In development | Generates daily practice sheets. Parameterised exercises rendered to standard notation and tablature via LilyPond, with deliberate variety across sessions. |
+| **`melete`** | MEL-uh-tee | v1, in daily use | Generates daily practice sheets. Parameterised exercises rendered to standard notation and tablature, with deliberate variety across sessions. |
 | **`aoede`** | ay-EE-dee | Reserved | Repertoire management. Acquisition, decay modelling, and maintenance scheduling for learned material. |
 
 Names are claimed the moment a tool is conceived, not when work begins — so they
@@ -135,23 +135,29 @@ to be a better teacher than a teacher.
 
 ## Status
 
-The organization is new and bootstrapping. Work is tracked as epics in this
-repository.
+The organization is new. Work is tracked as epics in this repository.
 
 | | |
 | --- | --- |
-| **`melete`** | In development. First tool. |
+| **`melete`** | v1 shipped and in daily use. First tool. |
 | **`aoede`** | Reserved. Not started. |
 
 **What `melete` does today:** generates a printable daily practice sheet —
 parameterised exercises, rendered to notation and tablature, selected with
-deliberate variety and a session log.
+deliberate variety and a session log that can reproduce any past sheet exactly.
 
 **What `melete` does not do:** it has no decay model, no fatigue state, no
 repertoire, and no memory of what you played yesterday beyond that log. The
 retention machinery described above is where this is going, not where it is. The
 first tool deliberately inherited the domain thinking from the earlier project
 and left the state model behind.
+
+**What is changing next:** v1 engraves through LilyPond, and that renderer is
+being replaced. The evaluation behind the decision is
+[`melete#71`](https://github.com/mnemosys-project/melete/issues/71). Almost
+nothing else moves with it — the music theory, the fretboard model, the
+exercise families, the selector and the session log are all independent of how
+a page is drawn, and the epic #1 specification says so explicitly.
 
 That distinction matters enough to state plainly: this organization is named for
 a problem it has not solved yet.

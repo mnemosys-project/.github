@@ -153,7 +153,8 @@ Both names are available on PyPI as of 2026-08-09. `mneme`, `euterpe`, and
 - Rhythm applied as a cross-cutting modifier over all families
 - Configurable instrument profiles: 4-, 5-, and 6-string bass
 - Coverage-aware random selection that spreads across parameter axes
-- LilyPond rendering to a single combined PDF per day
+- Rendering to a single combined PDF per day — LilyPond in v1, and the renderer
+  is being replaced (§4, *The renderer boundary*)
 - A cover page summarizing the day's session
 - A machine-readable session log recording every parameter of every pick
 
@@ -279,9 +280,86 @@ function testable without rendering anything.
 
 **`render.py` is the blast door.** It is the only module aware that a LilyPond
 binary exists. If the LilyPond distribution changes, exactly one file changes.
+That claim is narrower than it looks; *The renderer boundary* below says how.
 
 `theory.py` and `instrument.py` are the most reused and the most exhaustively
 testable modules. They are built first.
+
+### The renderer boundary
+
+Melete v1 engraves through LilyPond, and **that renderer is being replaced.**
+The evaluation that decided it is
+[`melete#71`](https://github.com/mnemosys-project/melete/issues/71), which
+records what LilyPond cost, where it falls short, and what any successor has to
+do. The display targets surveyed as successors are in melete's `docs/reports/`.
+A migration epic follows this one.
+
+Nothing in this specification is withdrawn on that account. What the change
+requires is that a reader can tell **at a glance which parts of the design
+outlive the renderer and which do not** — because that distinction is the main
+technical asset this epic hands to the migration, and until this section existed
+it was implicit in the module layout rather than stated anywhere.
+
+#### What survives the renderer change
+
+| Design element | Specified in |
+|---|---|
+| 12-TET pitch, interval, scale and chord math | §4 (`theory.py`) |
+| The accidental spelling model — `Key`, the three tiers, the implied-parent table, `SpelledPitch` | §10a |
+| The instrument profile and the fretboard model | §5 |
+| The Score IR, the written-duration contract, the one-level-nesting rule | §6 |
+| All four exercise families and their parameter axes | §7 |
+| Exercise length, `positional`, the per-family tempo ranges | §7 |
+| The rhythm modifier and its four axes | §8 |
+| Coverage-aware selection, the weighting expression, the validity gate, determinism | §9 |
+| The configuration file and every key in it | §10 |
+| The session log, its history, and exact replay | §9, §12 |
+| The command-line interface | §11 |
+| Error handling and the vocabulary registry | §13 |
+| The naming convention and the epic document formats | [`NAMING.md`](../../NAMING.md), [`docs/epic-document-formats.md`](../../docs/epic-document-formats.md) |
+
+That is nearly the whole design. It survives because `SpelledPitch` is
+notation-neutral by construction (§10a, *Where spelling lives*) and the IR
+carries no LilyPond at all, so the spelling model — the part that took the most
+design effort — lands on any renderer that accepts a letter and an alteration
+rather than an integer.
+
+#### What is LilyPond-specific
+
+**None of this is deleted or deprecated.** It is the record of what was learned
+about generating engraved output from this IR, and it is the input the migration
+starts from.
+
+| Element | Recorded in |
+|---|---|
+| `lilypond/emit.py` — the only module that knows LilyPond syntax | §4, §14 |
+| `lilypond/render.py` — the only module that knows a binary exists | §4, §13 |
+| The golden `.ly` files, and golden-file testing as the verification strategy | §14 |
+| The `\tabFullNotation` branch for `staves = "tab"` | §10, *Notation conventions* |
+| Clef selection, and the written-pitch convention | decision #39 |
+| `\key <tonic> <mode>` and LilyPond's mode keywords | §10a, tier 1 |
+| `\bar "\|."`, `\accidentalStyle forget`, `\tuplet n/m` | §6, §7, §10 |
+| The markup `bookpart` carrying the cover page | §12 |
+| LilyPond as a binary prerequisite, and everything that followed from it | §15 |
+| The seven constructs written blind and accepted on first contact | `melete#71` |
+
+#### The blast door is narrower than its name
+
+The claim above — that a change of LilyPond *distribution* touches one file —
+held, and was paid out once: decision #23 replaced the Python package with a
+system binary and cost a single line of `pyproject.toml` (§15, *Containment
+held*).
+
+It does **not** hold for a change of *renderer*. `render.py` isolates the
+binary; `emit.py` isolates the syntax, and `emit.py` is by far the larger of the
+two. A reader who takes "blast door" to mean a one-file swap will underestimate
+the migration substantially. The measured figure is in `melete#71`: roughly 210
+statements across the two modules, plus every golden file, out of a codebase in
+which every other module is renderer-agnostic.
+
+The boundary still did its job. Confining the damage to two modules is what
+makes replacing the renderer a bounded project rather than a rewrite — decision
+#5 paying out a second time, in a form it was not chosen for.
 
 ## 5. Instrument Model
 
@@ -434,7 +512,7 @@ Derived from MNEMOSYS H1, H2, H3, H5.
 | Axis            | Values                                                      |
 |-----------------|-------------------------------------------------------------|
 | `root`          | 12 pitch classes                                            |
-| `scale_type`    | 7 major modes, 7 melodic minor modes, 7 harmonic minor modes, major and minor pentatonic, blues, whole-tone, two diminished (~28) |
+| `scale_type`    | 7 major modes, 7 melodic minor modes, 7 harmonic minor modes, major and minor pentatonic, blues, whole-tone, two diminished (27) |
 | `traversal`     | positional (boxed), three-notes-per-string, one-octave-per-string, single-string linear |
 | `string_set`    | contiguous or non-contiguous subsets                        |
 | `pattern`       | straight, thirds, fourths, groups-of-3, groups-of-4, numeric permutations (1-2-3-5) |
@@ -743,6 +821,28 @@ Recording the weight inputs is a small extension of what §12 already commits
 `session.json` to holding, and it makes any past sheet auditable — not merely
 regenerable — because the inputs that produced it are on disk next to the output.
 
+#### Replay is read-back, not re-execution
+
+"Self-sufficient for replay" admits two readings, and the difference matters
+enough to state. `melete replay <date>` **reconstructs** the session from the
+exercises, seed and weight inputs recorded in `session.json`. It does **not**
+re-run the selector against the recorded distances and compare the result.
+
+Read-back is the correct reading here. The exercises are recorded in full, so
+re-deriving them adds nothing to the reproduction itself, and the injection
+point re-execution would need does not exist in `selection.select`.
+
+**What that means replay does not catch, stated plainly:** a change to the
+selector that would have drawn differently is invisible to it. Re-execution
+would be the stronger guarantee — it would turn replay into a regression test on
+the weighting function — but that is a different feature wearing the same name,
+and building it is a decision for whoever wants that test rather than a gap in
+this one.
+
+The ambiguity was found when B14's replay test turned out to pass somewhat
+trivially under the read-back reading, which is the kind of thing a test tells
+you only if you ask what it would have caught.
+
 ### Tunability
 
 The weighting function and horizon live in one module behind one entry point.
@@ -961,11 +1061,18 @@ like, and because the primary reader of the notation staff is an instructor.
 
 **Staff mode is a switch.** `both` (default), `tab`, or `notation`.
 
-This carries a genuine emitter consequence: LilyPond's `TabStaff` suppresses
-stems and beams by default, assuming a notation staff above supplies the rhythm.
-In `tab` mode the emitter must therefore **explicitly enable rhythm display** —
-Guitar Pro-style tablature with stems — or the exercise is unreadable. In `both`
-mode plain tablature is correct. This is a branch in the emitter, not a flag.
+The switch itself is renderer-agnostic. Its **consequence is not**, and the
+consequence is the part a successor renderer has to re-derive: LilyPond's
+`TabStaff` suppresses stems and beams by default, assuming a notation staff
+above supplies the rhythm. In `tab` mode the emitter must therefore explicitly
+enable rhythm display with `\tabFullNotation` — Guitar Pro-style tablature with
+stems — or the exercise is unreadable. In `both` mode plain tablature is
+correct. This is a branch in the emitter, not a flag.
+
+What generalizes past LilyPond is the requirement, not the mechanism: **tab-only
+output must carry rhythm**, however the renderer expresses that. What does not
+generalize is the assumption that it is off by default. See §4, *The renderer
+boundary*.
 
 ## 10a. Accidental Spelling
 
@@ -1322,7 +1429,7 @@ rendered PDF.
 
 | Component | Approach |
 |---|---|
-| `theory.py`, `instrument.py` | Exhaustive. All 12 roots against all ~28 scale types, verified against known interval content. Every pitch maps to valid positions on every profile. |
+| `theory.py`, `instrument.py` | Exhaustive. All 12 roots against all 27 scale types, verified against known interval content. Every pitch maps to valid positions on every profile. |
 | Families | Property-based over a wide parameter sweep. |
 | `rhythm.py` | **Sounding** durations (§6) of a voice sum to the pattern's cycle length; every written duration is a representable notehead; tuplet ratios well-formed. |
 | `vocabulary.py` | Every identifier used in §7, §8, and the §10 example config resolves; every axis value has a display name. |
@@ -1511,11 +1618,28 @@ than this section previously described, independent of architecture.
 The withdrawn claim was a real benefit, not decoration. Obtaining LilyPond is now
 an **environment prerequisite** that a user must satisfy before melete works, and
 the dev container needs a system package that the shared `dev-python` image does
-not and should not carry. Vergil has no mechanism for repo-specific system
-dependencies today; the design problem is filed as
-[`vergil-project/vergil-tooling#2718`](https://github.com/vergil-project/vergil-tooling/issues/2718),
-and publishing our own aarch64 wheels — which would restore the original
-property — is [`mnemosys-project/melete#21`](https://github.com/mnemosys-project/melete/issues/21).
+not and should not carry.
+
+> **Updated 2026-08-11.** Both follow-ons this paragraph opened have since
+> closed, in opposite ways, and the outcome is worth recording because the
+> cheaper remedy was the one that landed.
+>
+> - **The container gap was closed at the toolchain level.**
+>   [`vergil-tooling#2718`](https://github.com/vergil-project/vergil-tooling/issues/2718)
+>   produced a declarative `[container].system-packages` facility, which melete
+>   adopted in `melete#51`. The dev and CI containers now carry Debian's
+>   LilyPond 2.24.4 without a bespoke image, so the "Vergil has no mechanism for
+>   this" statement above is **no longer true** — it describes the position at
+>   the time of the amendment, and is left as written because decision #24 was
+>   taken from it.
+> - **Publishing our own aarch64 wheels was declined.**
+>   [`melete#21`](https://github.com/mnemosys-project/melete/issues/21) is closed
+>   won't-do: system-packages removed the need, and the stock Debian binary is a
+>   stable release where a self-maintained fork of the PyPI redistribution would
+>   have pinned us to a development snapshot we also had to maintain.
+>
+> Neither changes the user-facing contract for daily use, which is still that
+> the binary is a host prerequisite outside the container.
 
 #### Containment held
 
@@ -1715,6 +1839,19 @@ rule, not the instance.
 |---|---|---|
 | 38 | Split §3's non-goals into permanent exclusions and deferrals, and move audio, MIDI, playback and performance scoring from the first into the second | The two were one list ending in the sentence that made the database, server, API and web UI *permanently* out of scope, so audio inherited a permanence nobody had ever argued for. The refusal of the service infrastructure is the point of the project and is left firm. Audio is a different case: it is the input side of the retention thesis, which is the one claim the spec makes that nothing in v1 tests — decay is self-reported, and "played at 140" says nothing about how well. The correction was forced by a live decision rather than by tidiness. `mnemosys-project/melete#69` chooses between emitting written pitches under a plain clef and sounding pitches under an octavated clef, and sounding pitches are what an audio or MIDI comparison would need; under §3 as written that argument counted for nothing, because the capability was banned. A scope boundary stated more strongly than its reasoning supports does not sit inert — it quietly makes downstream decisions on the strength of an adjective, and this one already had. |
 
+### Resolutions from the closing sweep
+
+Decisions 39–41 were recorded on 2026-08-11 by the documentation review that
+closes this epic. None of them changes what shipped. Each records something the
+epic decided in code, or in an issue, without writing it into the specification
+— which is precisely what a closing documentation bookend exists to catch.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 39 | An octave transposition has **exactly one owner**, and melete is it: `emit.py` writes the *printed* pitch, an octave above the IR's sounding pitch, under a plain `\clef "bass"` or `\clef "treble"` | Bass guitar sounds an octave below written, and both conventions for expressing that are correct — the application transposes under a plain clef, or the renderer transposes under an octavated one. What is not correct is applying it twice, which is what melete did for the whole of Phase B: it added 12 to every note *and* wrote `\clef "bass_8"`, which **performs** a transposition rather than describing one. **Every exercise engraved two octaves above its sound.** The tablature was right throughout, 2,700 tests at 100% branch coverage passed, and the defect was found only by rendering a page and looking at it (`melete#58`, fixed in `melete#66`). The IR stays in sounding pitch; the +12 lives inside `emit.py` alongside the matching transposition of the `stringTunings` chord, and the two must move together because LilyPond derives frets from pitch against the declared tuning. `melete#69` proposed reversing this to sounding pitch under an octavated clef and is closed unbuilt, since the module is being replaced — but the question arrives again with the next renderer, and the general rule is the part that carries: **when both the application and the renderer can apply an octave and neither states that it does, the failure is silent and looks plausible.** |
+| 40 | `replay` is read-back, not re-execution, and the limit is stated rather than left to be discovered | Decision #14 called `session.json` "self-sufficient for replay" without saying which of the two operations it meant. Read-back is what shipped and what is correct here — the exercises are recorded in full, so re-deriving them adds nothing to the reproduction, and the injection point re-execution needs does not exist in `selection.select`. The cost is that a selector change which would have drawn differently is invisible to replay. That is a real gap in what the test proves, and stating it is the difference between a known boundary and a guarantee quietly weaker than its name. See §9, *Replay is read-back, not re-execution*. |
+| 41 | Mark the renderer boundary in the specification rather than leaving it implicit in the module layout, and delete none of the LilyPond material | The renderer is being replaced (`melete#71`) and nearly everything else in this design outlives it — but that was legible only to a reader who already knew which modules imported which. §4's *The renderer boundary* makes it explicit in both directions, and it corrects the "blast door" claim, which is true of a change of *distribution* and false of a change of *renderer*: `render.py` isolates the binary while `emit.py` isolates the syntax, and the second is the larger. The LilyPond-specific material is kept and labelled rather than removed, because it is the record of what was learned — the seven constructs, the string-numbering inversion, the `TabStaff` defaults, the octave trap in #39, and the finding that golden-file tests pin generated text rather than its correctness. A migration that has to rediscover all of that pays for this epic twice. |
+
 ## 17. Deferred to v2
 
 The following are explicitly planned but out of scope, and the v1 design leaves
@@ -1744,5 +1881,15 @@ room for each:
 
 **Status:** Design approved 2026-08-09. Filed as epic
 [`mnemosys-project/.github#1`](https://github.com/mnemosys-project/.github/issues/1)
-on 2026-08-09. The authoritative naming convention referenced in §2 lives at
+on 2026-08-09. **Delivered**: melete v1 shipped, was deployed to the author's
+host and validated on printed paper (`melete#19`, `melete#20`). Reviewed and
+amended by this epic's closing documentation sweep on 2026-08-11.
+
+The renderer this specification describes is being replaced; §4, *The renderer
+boundary*, says what that reaches and what it does not. Everything outside that
+boundary stands as written.
+
+The authoritative naming convention referenced in §2 lives at
 [`NAMING.md`](../../NAMING.md) in this repository.
+[`spec-as-approved.md`](./spec-as-approved.md) is the frozen 2026-08-09 snapshot
+and is never amended; this document is the living one.
