@@ -26,7 +26,7 @@ supplies what was approved.
 
 ---
 
-# Melete — Practice Exercise Generator
+## Melete — Practice Exercise Generator
 
 **Design specification, v1.0**
 **Date:** 2026-08-09
@@ -138,7 +138,7 @@ frequently require both.
 
 ### Pipeline
 
-```
+```text
 config.toml
     |
     v
@@ -164,7 +164,7 @@ Selector ---------> ExerciseSpec ------> Family generator ------> Score IR
 
 ### Module layout
 
-```
+```text
 src/melete/
   instrument.py    InstrumentProfile and fretboard queries
   score.py         The IR: Note, Tuplet, Voice, Score. Pure data.
@@ -386,7 +386,7 @@ independently, weighted by recency.**
 For each axis, the selector reads the last N sessions from the log and computes,
 for each candidate value, how many sessions have passed since it was last used:
 
-```
+```text
 w(value) = 1.0                                       # never used
 w(value) = min(1.0, sessions_since / horizon)        # horizon default 14
 w(value) = 0.05                                      # used today or yesterday
@@ -478,7 +478,7 @@ mode plain tablature is correct. This is a branch in the emitter, not a flag.
 
 ## 11. Command-Line Interface
 
-```
+```text
 melete generate                  # today's session
 melete generate --date 2026-08-10
 melete generate --seed 12345     # reproduce a session exactly
@@ -493,7 +493,7 @@ melete families                  # list families and their parameter axes
 
 ## 12. Output and Session Log
 
-```
+```text
 sessions/2026-08-09/
   practice.pdf        cover page + exercises, one printable document
   session.json        every parameter of every selection, plus the seed
@@ -519,7 +519,7 @@ entry is generated from that exercise's `params` dictionary, rendered into plain
 language, optionally followed by the `Score.instruction` focus cue when the
 family supplies one:
 
-> 3. D Dorian, three-notes-per-string, ascending thirds, strings 2-5, triplet
+> 1. D Dorian, three-notes-per-string, ascending thirds, strings 2-5, triplet
 >    eighths, 80-100 bpm
 >    *Keep the plucking hand even through the string crossings.*
 
@@ -566,7 +566,7 @@ rendered PDF.
 
 Every family test asserts, for every generated note:
 
-```
+```text
 note.pitch == instrument.tuning[note.string] + note.fret
 ```
 

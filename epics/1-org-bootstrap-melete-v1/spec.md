@@ -209,7 +209,7 @@ frequently require both.
 
 ### Pipeline
 
-```
+```text
 config.toml
     |
     v
@@ -235,7 +235,7 @@ Selector ---------> ExerciseSpec ------> Family generator ------> Score IR
 
 ### Module layout
 
-```
+```text
 src/melete/
   instrument.py    InstrumentProfile and fretboard queries
   score.py         The IR: Note, Tuplet, Voice, Score. Pure data.
@@ -358,8 +358,8 @@ statements across the two modules, plus every golden file, out of a codebase in
 which every other module is renderer-agnostic.
 
 The boundary still did its job. Confining the damage to two modules is what
-makes replacing the renderer a bounded project rather than a rewrite — decision
-#5 paying out a second time, in a form it was not chosen for.
+makes replacing the renderer a bounded project rather than a rewrite — decision #5
+paying out a second time, in a form it was not chosen for.
 
 ## 5. Instrument Model
 
@@ -461,7 +461,7 @@ index (decision #26).
 scaling.** A triplet of eighths is three notes of duration `1/8` inside a
 `Tuplet` with ratio `(3, 2)`. Sounding time is derived, never stored:
 
-```
+```text
 sounding(note) = note.duration * ratio[1] / ratio[0]     # inside a Tuplet
 sounding(note) = note.duration                           # otherwise
 ```
@@ -699,7 +699,7 @@ independently, weighted by recency.**
 For each axis, the selector reads the last N sessions from the log and computes,
 for each candidate value, how many sessions have passed since it was last used:
 
-```
+```text
 FLOOR   = 0.05
 HORIZON = 14                                    # default; configurable
 
@@ -1378,7 +1378,7 @@ family modules would not survive its first review.
 
 ## 11. Command-Line Interface
 
-```
+```text
 melete generate                  # today's session
 melete generate --date 2026-08-10
 melete generate --seed 12345     # fixed seed against current history
@@ -1428,7 +1428,7 @@ that configuration validation and the cover-page renderer read.
 
 ## 12. Output and Session Log
 
-```
+```text
 sessions/2026-08-09/
   practice.pdf        cover page + exercises, one printable document
   session.json        every parameter of every selection, the seed, and the
@@ -1472,7 +1472,7 @@ entry is generated from that exercise's `params` dictionary, rendered into plain
 language, optionally followed by the `Score.instruction` focus cue when the
 family supplies one:
 
-> 3. D Dorian, three-notes-per-string, ascending thirds, strings 2-5, triplet
+> 1. D Dorian, three-notes-per-string, ascending thirds, strings 2-5, triplet
 >    eighths, 80-100 bpm
 >    *Keep the plucking hand even through the string crossings.*
 
@@ -1567,7 +1567,7 @@ rendered PDF.
 
 Every family test asserts, for every generated note:
 
-```
+```text
 note.pitch == instrument.tuning[note.string] + note.fret
 ```
 
@@ -1614,7 +1614,7 @@ reason, not an untested branch left to accumulate.
 The assertion that matters most is the direct analogue of the central invariant,
 and it is checked for every note of every generated exercise alongside it:
 
-```
+```text
 spelled pitch class == note.pitch % 12
 ```
 

@@ -172,8 +172,8 @@ physically justified — fret 0 sounds while the fretting hand stays put — and
 without it the open-A pentatonic box is refused as a seven-fret stretch. But it
 cannot distinguish an open string at the bottom of a low shape from one
 interleaved with a hand high on the neck. Accepted as a temporary
-simplification, tracked as `melete#60`, and recorded as provisional in decision
-#37 so a later reader knows it was a knowing choice rather than a rule someone
+simplification, tracked as `melete#60`, and recorded as provisional in decision #37
+so a later reader knows it was a knowing choice rather than a rule someone
 believed was complete.
 
 **The tablature staff spells keylessly**, so in a flat key the two staves carry
@@ -241,9 +241,9 @@ integrated, #10 org metadata, #11 epic document formats, #14 LilyPond as binary
 prerequisite, #16 profile README rewritten, #19 tempo and nesting decisions, #20
 accidental spelling and key signatures, #22 Phase S plan, #25 banner statement
 corrected, #30 arpeggio parent table, #32 min6/min_maj7 divergence recorded, #34
-diminished-triad and keyless-tab spellings, #37 §10 example config made working,
-#39 hand-span bounds, #41 scope exclusions separated from deferrals,
-#43 renderer boundary marked, #45 seven spec corrections.
+diminished-triad and keyless-tab spellings, #37 §10 example config made working, #39
+hand-span bounds, #41 scope exclusions separated from deferrals, #43 renderer
+boundary marked, #45 seven spec corrections.
 
 **`mnemosys-project/melete` (36)** — #22 project scaffolding, #24 integration
 tests off, #25 theory, #26 instrument, #27 render adapter, #28 vocabulary, #29

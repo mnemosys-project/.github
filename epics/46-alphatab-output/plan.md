@@ -71,10 +71,12 @@ PR) OR a small docs PR carrying `spike-findings.md` — file it as a docs task s
 the findings are committed under the epic.
 
 **Files:**
+
 - Create: `epics/46-alphatab-output/spike-findings.md` (in `.github`).
 - Scratch: a throwaway `melete-render/` prototype + a hand-written `.atex`.
 
 **Produces (consumed by Tasks 3–6):** confirmed answers to —
+
 - Does alphaTab **auto-bar** a duration stream, or must the emitter place `|`?
 - How is a **tie across a barline** expressed in alphaTex (token, placement)?
 - The exact alphaTex for: a **6-string bass tuning**, a **string.fret** note, a
@@ -109,10 +111,12 @@ Tasks 3–6 proceed using the recorded syntax.
 ### Task 2: Container capability — Node + alphaTab
 
 **Files:**
+
 - Modify: `vergil.toml` (add a Node/alphaTab container capability).
 - Create: `melete-render/package.json` (pins alphaTab; installed at image build).
 
 **Interfaces:**
+
 - Produces: Node + the pinned alphaTab dependency present on `PATH`/in the
   container, so Task 3's `render.mjs` runs.
 
@@ -152,9 +156,11 @@ filed**, blocked-by Tasks 2 and 8: on a cold image, Node + alphaTab present and
 ### Task 3: The renderer (`melete-render/`)
 
 **Files:**
+
 - Create: `melete-render/render.mjs`, `melete-render/README.md`.
 
 **Interfaces:**
+
 - Consumes: alphaTex text on **stdin**.
 - Produces: `.gp` bytes on **stdout**; non-zero exit + stderr on failure. This
   contract is frozen — the Python blast door (Task 7) and any future standalone
@@ -199,10 +205,12 @@ try {
 ### Task 4: IR evolution (additive) — `Measure`, `Note.tied`, lift nesting
 
 **Files:**
+
 - Modify: `src/melete/score.py`.
 - Test: `tests/test_score.py`.
 
 **Interfaces:**
+
 - Produces (consumed by Tasks 5–6):
   - `Note.tied: bool = False` — "this note is tied to the following note."
   - `Measure(voice: Voice)` frozen dataclass — one bar's flat voice.
@@ -234,6 +242,7 @@ def test_tuplet_may_contain_a_tuplet():
 ```
 
   (`_note()` is a local factory returning a valid `Note`.)
+
 - [ ] **Step 6: Run — fails** (current `_first_foreign(self.notes, (Note,))`
   rejects a `Tuplet`).
 - [ ] **Step 7: Lift the invariant.** Allow `Tuplet.notes` to hold `Note | Tuplet`;
@@ -263,10 +272,12 @@ def test_measure_holds_a_voice():
 ### Task 5: The barring pass
 
 **Files:**
+
 - Modify: `src/melete/score.py` (add `bar()` beside `notes()`/`sounding_duration()`).
 - Test: `tests/test_score.py`.
 
 **Interfaces:**
+
 - Consumes: `Voice`, `time_signature: tuple[int, int]`, and the confirmed answer
   from Task 1 (auto-bar vs manual). **If Task 1 finds alphaTab auto-bars and
   auto-ties, this task shrinks to a no-op/validation and the emitter (Task 6)
@@ -323,10 +334,12 @@ def test_bar_splits_and_ties_across_the_barline():
 ### Task 6: The alphaTex emitter
 
 **Files:**
+
 - Create: `src/melete/alphatab/__init__.py`, `src/melete/alphatab/emit.py`.
 - Test: `tests/alphatab/test_emit.py`, `tests/alphatab/golden/`.
 
 **Interfaces:**
+
 - Consumes: `Score`, `list[Measure]` from `bar()`, and the **exact alphaTex
   tokens from Task 1's `spike-findings.md`** (tuning, string.fret, duration,
   tuplet, nested tuplet, tie, tempo, fingering, accent).
@@ -369,10 +382,12 @@ def test_single_note_emits_string_fret_and_duration():
 ### Task 7: The Python blast door (`alphatab/render.py`)
 
 **Files:**
+
 - Create: `src/melete/alphatab/render.py`.
 - Test: `tests/alphatab/test_render.py`.
 
 **Interfaces:**
+
 - Consumes: alphaTex `str`, an output dir, `stem`.
 - Produces: `render(alphatex: str, out_dir: Path, *, stem: str) -> Path`
   returning the written `.gp` path; raises `RenderError` on failure. Mirrors
@@ -412,10 +427,12 @@ def test_missing_node_states_the_resolution(tmp_path, monkeypatch):
 ### Task 8: Wire CLI/session to the new pipeline
 
 **Files:**
+
 - Modify: `src/melete/cli.py` (the `generate` output half, lines ~365–377).
 - Test: `tests/test_cli_generate.py`.
 
 **Interfaces:**
+
 - Consumes: `alphatab.emit.emit_book`/`emit_score`, `alphatab.render.render`,
   `score.bar`.
 - Produces: a `generate` run that writes a day's `.gp` + the kept alphaTex + the
@@ -444,9 +461,11 @@ def test_missing_node_states_the_resolution(tmp_path, monkeypatch):
 ### Task 9: Black-box integration test (Node-gated)
 
 **Files:**
+
 - Create/extend: `tests/alphatab/test_render.py` (the real-renderer test).
 
 **Interfaces:**
+
 - Consumes: the real `melete-render/` tool + Node (present in the container).
 - Produces: proof that real alphaTex → the real renderer → a **valid `.gp`**.
 
@@ -470,6 +489,7 @@ def test_missing_node_states_the_resolution(tmp_path, monkeypatch):
 Runs **only after Tasks 1–9 are merged and the `.gp` pipeline is green.**
 
 **Files:**
+
 - Delete: `src/melete/lilypond/`, `tests/lilypond/`.
 - Modify: `vergil.toml` (drop `system-packages = ["lilypond"]` and the LilyPond
   `integration-tests` framing), `docs/design.md`, `CLAUDE.md` (melete#83).
