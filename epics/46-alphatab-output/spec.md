@@ -128,7 +128,7 @@ knowledge leaks past it — the same law that kept LilyPond out of the core.
 
 The generation core is preserved; only the output half changes.
 
-```
+```text
 families ─▶ Score IR ─▶ bar() ─▶ measures ─▶ emit ─▶ alphaTex ─▶ [ melete-render ] ─▶ .gp
  (kept)    (evolved)  (new,pure)  (new)     (new)     text          Node/alphaTab
                                                              THE INTERFACE (thin, text, black box)

@@ -57,7 +57,7 @@ const bytes = new alphaTab.exporter.Gp7Exporter().export(score, settings); // Ui
 Feeding **8 quarter notes in 4/4 with no `|`** produced **one bar** containing all
 eight beats (an overfull bar), not two bars:
 
-```
+```text
 :4 3.3 3.3 3.3 3.3 3.3 3.3 3.3 3.3      -> bars = 1  (8 beats in one bar)
 3.3.4 3.3.4 3.3.4 3.3.4 | 3.3.4 3.3.4 3.3.4 3.3.4  -> bars = 2
 ```
@@ -78,7 +78,7 @@ simply sits in an overfull bar; alphaTab never splits or ties it for you.
 A tie is expressed by writing a note whose **fret position is `-`** on the **same
 string**, with its own duration, as the first beat of the next bar:
 
-```
+```text
 ... 3.3.4 |            <- last beat of bar N (becomes the tie ORIGIN)
 -.3.4 3.3.4 3.3.4 3.3.4  <- '-' on string 3 = tie DESTINATION, continues previous
 ```
@@ -97,7 +97,7 @@ Round-trip confirms: the origin note reports `isTieOrigin`, the `-` note reports
 
 The **single-note beat grammar** (verified) is:
 
-```
+```text
 <fret>.<string>{ note-effects }.<duration>{ beat-effects }
 ```
 
@@ -164,7 +164,7 @@ diverges from the v1 `.pdf` on octave *display* only — playback pitch is
 identical. This is an input decision for the emitter (Task 6), recorded here so it
 is not re-litigated as a bug during the port.
 
-```
+```text
 \clef bass 4.6{lf 2}.4 5.5.4 3.4{ac}.4 2.3.4 | ...
 ```
 

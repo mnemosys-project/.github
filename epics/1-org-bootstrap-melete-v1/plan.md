@@ -111,7 +111,7 @@ and does not fabricate the step.
 
 ---
 
-# Phase A — Organization
+## Phase A — Organization
 
 Delivers a complete, conventional GitHub organization. Stands alone: even if
 melete were abandoned, the org would be correctly formed.
@@ -121,6 +121,7 @@ melete were abandoned, the org would be correctly formed.
 **Repo:** `mnemosys-project/.github`
 
 **Files:**
+
 - Create: `profile/README.md`
 - Create: `CONTRIBUTING.md`
 - Create: `CODE_OF_CONDUCT.md`
@@ -142,6 +143,7 @@ There is also no `task` label in this org's registry, so the originally planned
 form, `issue.yml`, plus `config.yml`.
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: the org profile surface. `profile/README.md` renders at
   `github.com/mnemosys-project`.
@@ -208,6 +210,7 @@ to tell an outside contributor what to include instead.
 ```bash
 vrg-container-run -- vrg-validate
 ```
+
 Expected: PASS.
 
 - [ ] **Step 6: Commit and report ready**
@@ -225,12 +228,14 @@ vrg-pr-workflow report-ready
 Implements the spec's *Document formats are standardized as part of this epic*.
 
 **Files:**
+
 - Create: `docs/epic-document-formats.md`
 - Create: `docs/templates/spec.md`
 - Create: `docs/templates/plan.md`
 - Create: `docs/templates/retrospective.md`
 
 **Interfaces:**
+
 - Consumes: this epic's own `spec.md` and `plan.md` as the reference instances.
 - Produces: the templates every future epic in this org starts from.
 
@@ -276,6 +281,7 @@ Seven images, six prompts, and a 578-line design document were left in the plain
 parent directory, outside version control. This task brings them in.
 
 **Files:**
+
 - Create: `profile/banner.png` (the accepted v03 generation)
 - Create: `docs/branding/banner-design.md`
 - Create: `docs/branding/prompts/*.txt` (six prompts, v01–v04)
@@ -338,6 +344,7 @@ The agent verifies and stops if absent:
 ```bash
 vrg-gh repo view mnemosys-project/docs --json name,visibility
 ```
+
 If this fails: comment "blocked: preconditions not met" and stop.
 
 - [ ] **Step 2: Write the initial site content**
@@ -368,6 +375,7 @@ Logical Minds Foundry application repo:
 vrg-gh api repos/logical-minds-foundry/<repo>/contents/vergil.toml \
   --jq '.content' | base64 -d
 ```
+
 If a comparable no-deploy application uses something other than
 `library-release`, record the finding on issue #1 and adopt theirs.
 
@@ -434,7 +442,7 @@ artifacts `vrg-validate` writes on every run: `.coverage`, `coverage.xml`,
 
 ---
 
-# Phase B — Melete
+## Phase B — Melete
 
 Built inside out. Every task's deliverable is testable without the layer above
 it existing. All tasks in this phase are **Repo: `mnemosys-project/melete`** and
@@ -443,10 +451,12 @@ it existing. All tasks in this phase are **Repo: `mnemosys-project/melete`** and
 ## Task B1: `theory.py` — 12-TET math
 
 **Files:**
+
 - Create: `src/melete/theory.py`
 - Test: `tests/test_theory.py`
 
 **Interfaces:**
+
 - Consumes: nothing. This is the base layer.
 - Produces:
   - `PITCH_CLASSES: tuple[str, ...]` — 12 names, index = pitch class
@@ -479,6 +489,7 @@ def test_blues_has_six_notes_per_octave():
 ```bash
 vrg-container-run -- uv run pytest tests/test_theory.py -v
 ```
+
 Expected: FAIL, `ModuleNotFoundError: No module named 'melete.theory'`.
 
 - [ ] **Step 3: Implement**
@@ -551,10 +562,12 @@ vrg-commit --type feat --scope theory --message "add 12-TET scale and chord math
 ## Task B2: `instrument.py` — profiles and the fretboard
 
 **Files:**
+
 - Create: `src/melete/instrument.py`
 - Test: `tests/test_instrument.py`
 
 **Interfaces:**
+
 - Consumes: `theory` (for pitch constants only).
 - Produces:
   - `InstrumentProfile` (frozen: `name`, `tuning: tuple[int, ...]`, `fret_count: int`)
@@ -647,10 +660,12 @@ def test_every_reachable_pitch_round_trips(name):
 ## Task B3: `vocabulary.py` — the identifier registry
 
 **Files:**
+
 - Create: `src/melete/vocabulary.py`
 - Test: `tests/test_vocabulary.py`
 
 **Interfaces:**
+
 - Consumes: `theory.SCALES`, `theory.CHORDS`.
 - Produces: `AXES: dict[str, dict[str, str]]` — axis name → {identifier: display}.
   Plus `display(axis, identifier) -> str` and `accepted(axis) -> list[str]`.
@@ -759,10 +774,12 @@ def test_no_scale_type_lacks_a_display_name():
 ## Task B4: `score.py` — the IR and the seam
 
 **Files:**
+
 - Create: `src/melete/score.py`
 - Test: `tests/test_score.py`
 
 **Interfaces:**
+
 - Consumes: `instrument.InstrumentProfile`.
 - Produces: `Note`, `Tuplet`, `Voice`, `Score`, and
   `sounding_duration(voice) -> Fraction` — the single shared helper of
@@ -852,12 +869,14 @@ def sounding_duration(voice: Voice) -> Fraction:
 ## Task B5: `families/chromatic.py`
 
 **Files:**
+
 - Create: `src/melete/families/__init__.py`
 - Create: `src/melete/families/chromatic.py`
 - Test: `tests/families/test_chromatic.py`
 - Test: `tests/families/conftest.py` (the shared invariant assertion)
 
 **Interfaces:**
+
 - Consumes: `score`, `instrument`, `vocabulary`.
 - Produces: `generate(profile, params) -> Score`, and
   `families.REGISTRY: dict[str, Callable]`.
@@ -946,10 +965,12 @@ def test_invariant_holds_across_the_sweep(profile_name, start_fret):
 ## Task B6: `families/scales.py`
 
 **Files:**
+
 - Create: `src/melete/families/scales.py`
 - Test: `tests/families/test_scales.py`
 
 **Interfaces:**
+
 - Consumes: `theory.scale_pitches`, `instrument.positions`, `vocabulary`.
 - Produces: `generate(profile, params) -> Score`. Default tempo 80–100
   (spec §7, decision #20).
@@ -1010,6 +1031,7 @@ def test_obeys_the_central_invariant():
 ```bash
 vrg-container-run -- uv run pytest tests/families/test_scales.py -v
 ```
+
 Expected: FAIL, no module `melete.families.scales`.
 
 - [ ] **Step 3: Implement**
@@ -1041,6 +1063,7 @@ def test_invariant_across_every_root_and_scale(root, scale_type):
 ## Task B6a: shared family helpers
 
 **Files:**
+
 - Create: `src/melete/families/_shared.py`
 - Test: `tests/families/test_shared.py`
 
@@ -1048,6 +1071,7 @@ Extracted during B6's REFACTOR, once the duplication between chromatic and
 scales is real rather than anticipated. Do not write this before B6.
 
 **Interfaces:**
+
 - Produces: `apply_direction(pitches, direction)`,
   `assign_positions(profile, pitches, string_set, traversal)`.
 
@@ -1068,10 +1092,12 @@ def test_down_reverses():
 ## Task B7: `families/arpeggios.py`
 
 **Files:**
+
 - Create: `src/melete/families/arpeggios.py`
 - Test: `tests/families/test_arpeggios.py`
 
 **Interfaces:**
+
 - Consumes: `theory.chord_pitches`, `instrument.positions`, `_shared`.
 - Produces: `generate(profile, params) -> Score`. Default tempo 80–100.
 
@@ -1157,10 +1183,12 @@ an inversion of 3 on a triad is a caller bug (spec §13).
 ## Task B8: `families/intervals.py`
 
 **Files:**
+
 - Create: `src/melete/families/intervals.py`
 - Test: `tests/families/test_intervals.py`
 
 **Interfaces:**
+
 - Consumes: `theory`, `instrument.positions`, `_shared`.
 - Produces: `generate(profile, params) -> Score`. Default tempo 70–90.
 
@@ -1353,6 +1381,7 @@ The highest-risk module in the plan. Spec §9 and decisions #14, #15, #17.
 **Files:** `src/melete/selection.py`, `tests/test_selection.py`
 
 **Interfaces:**
+
 - Consumes: `vocabulary.AXES`, `instrument`, family registry.
 - Produces:
   - `ExerciseSpec` (frozen: `family: str`, `params: dict`)
@@ -1859,7 +1888,7 @@ def test_vocabulary_lists_every_axis():
 
 ---
 
-# Phase S — Spelling
+## Phase S — Spelling
 
 Implements spec §10a and decisions #27–30. Reverses decision #9, which was not a
 notation choice but a missing layer: a 12-TET integer cannot distinguish F♯ from
@@ -1878,10 +1907,12 @@ independent of everything.
 ## Task S1: `theory` — the spelling model
 
 **Files:**
+
 - Modify: `src/melete/theory.py`
 - Test: `tests/test_theory.py`
 
 **Interfaces:**
+
 - Consumes: `SCALES`, `CHORDS`, the existing `_lookup`.
 - Produces:
   - `Key(tonic: int, scale_type: str)` — frozen
@@ -2090,12 +2121,14 @@ vrg-commit --type feat --scope theory --message "add the spelling model" --body 
 **Blocked-by:** S1
 
 **Files:**
+
 - Modify: `src/melete/score.py`
 - Modify: `src/melete/rhythm.py`
 - Modify: `src/melete/families/chromatic.py`, `src/melete/families/scales.py`
 - Test: `tests/test_score.py`, `tests/test_rhythm.py`, `tests/families/conftest.py`
 
 **Interfaces:**
+
 - Consumes: `theory.Key`, `theory.SCALES`.
 - Produces: `Score.key: Key | None`; `assert_spelling_sounds_correctly(score)` in
   the shared family conftest.
@@ -2176,11 +2209,13 @@ key and the spelling silently falls back to tier 3.
 **Blocked-by:** S1, S2
 
 **Files:**
+
 - Modify: `src/melete/lilypond/emit.py`
 - Test: `tests/lilypond/test_emit.py`
 - Modify: `tests/lilypond/golden/*.ly` (regenerated)
 
 **Interfaces:**
+
 - Consumes: `theory.spell`, `theory.tonic_spelling`, `theory.tier`,
   `theory.parent_scale`, `Score.key`.
 - Produces: no new public surface; `_PITCH_NAMES` is **deleted**.
@@ -2254,6 +2289,7 @@ forever, so the diff is the only review this output gets before a real render.
 **Blocked-by:** none
 
 **Files:**
+
 - Modify: `src/melete/config.py`
 - Test: `tests/test_config.py`
 
@@ -2280,7 +2316,7 @@ def test_key_signatures_rejects_a_non_boolean() -> None:
 
 ---
 
-# Phase C — Proof
+## Phase C — Proof
 
 ## Task C1: Deploy melete into daily use
 
@@ -2315,6 +2351,7 @@ judgment about printed output.
 **Procedure:** generate sheets on five consecutive days. Print each.
 
 **Acceptance, all required:**
+
 - Every sheet prints as one document, cover page first (spec §12).
 - Tablature and notation agree on every exercise — spot-check the central
   invariant by eye on a sample.
@@ -2328,7 +2365,7 @@ failure the task stays open and the epic stays open.
 
 ---
 
-# Task Summary
+## Task Summary
 
 | # | Task | Repo | Blocked-by |
 |---|---|---|---|
