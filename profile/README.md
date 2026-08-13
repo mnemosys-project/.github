@@ -94,6 +94,7 @@ over intact. Everything else was thrown away.
 | --- | --- | --- | --- |
 | **`melete`** | MEL-uh-tee | v1, in daily use | Generates daily practice sheets. Parameterised exercises rendered to standard notation and tablature, with deliberate variety across sessions. |
 | **`aoede`** | ay-EE-dee | Reserved | Repertoire management. Acquisition, decay modelling, and maintenance scheduling for learned material. |
+| **`urania`** | yoo-RAY-nee-uh | Reserved | Performance measurement. Records a performance, compares it against the ideal rendition, scores it, and highlights where it diverged. |
 
 Names are claimed the moment a tool is conceived, not when work begins — so they
 are not rediscovered later and argued about.
@@ -141,6 +142,7 @@ The organization is new. Work is tracked as epics in this repository.
 | --- | --- |
 | **`melete`** | v1 shipped and in daily use. First tool. |
 | **`aoede`** | Reserved. Not started. |
+| **`urania`** | Reserved. Not started. The intended third tool; long-term. |
 
 **What `melete` does today:** generates a printable daily practice sheet —
 parameterised exercises, rendered to notation and tablature, selected with
