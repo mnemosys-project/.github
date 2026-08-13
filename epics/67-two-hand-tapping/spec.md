@@ -70,6 +70,8 @@ re-implementing arpeggio and scale geometry inside a new family.
   defaults, so every existing family and test is unchanged.
 - A hand-count-aware generalization of `_shared.boxed`, from "these pitches fit
   one hand" to "these pitches partition into one or two hands that each fit".
+- A one-line change to `rhythm.restamp`'s accent pass so it never accents a
+  `SLURRED` note (§9) — the only edit to the shared rhythm module.
 - Tapping realization for the **`arpeggios`** and **`scales`** families: the
   register-split two-hand shapes (categories A and B of the survey).
 - Legato: within a hand's run of consecutive same-string notes, the first note
@@ -218,12 +220,21 @@ pipeline does not already pass.
    solves only as far as the corpus data supports (§12). A shape that cannot be
    laid out under two hands **raises** rather than forcing a bad fingering, and
    §9's validity gate resamples.
-3. **Articulate.** Stamp each note's `hand`; the attacked notes become `TAPPED`.
+3. **Articulate.** Stamp each note's `hand` and mark every note `TAPPED` — both
+   hands tap, so in a two-hand shape no note is `PLUCKED` (§11, decision 12);
+   that value stays the single-hand default. Step 4 then relaxes the notes that
+   are actually slurred.
 4. **Legato.** Walk each hand's notes in playing order. Within a run of
    consecutive notes on the *same string*, the first is `TAPPED` and the rest
    are `SLURRED` — a hammer-on where the fret ascends, a pull-off where it
    descends. Any string change forces a fresh `TAPPED`. This is derived from
    geometry, not a separate axis (§11, decision 7).
+
+Because tapping runs before `rhythm.restamp`, the voice reaching the restamp
+already carries `attack`, and its accent pass is taught to skip `SLURRED` notes
+(§9): an accent marks an attack, and a slur has none. This is the only edit
+tapping makes to a shared module beyond the `Note` fields (§4) and the
+`_shared.boxed` generalization (§6).
 
 ## 6. Layout: one or two hands
 
@@ -281,17 +292,30 @@ lands it supersedes this weight rather than extending it.
 ## 8. Rendering
 
 melete engraves by emitting alphaTex and rendering with the vendored
-`melete-render` (alphaTab). The emitter must translate the new articulations
-into alphaTex note effects — the same `{…}` block that already carries `acc`
-and `lf`.
+`melete-render` (alphaTab). This is melete's **only** render path, so whether
+the new articulations can travel it is a feasibility question, not a detail. The
+emitter must translate `hand`/`attack` into note effects alongside the `acc` and
+`lf` it already emits — a right-hand tap, a left-hand tap, and a hammer/pull
+slur — and a right-hand-tapped note also needs *right-hand* fingering, where the
+emitter uses `lf` (left-hand only) today. The spike resolves that too.
 
-**Prerequisite spike.** alphaTab is a full Guitar Pro renderer and GPIF carries
-`Tapped`, `LeftHandTapped`, and hammer/pull natively, so the model can represent
-taps; the open question is whether melete's alphaTex *text* path exposes those
-effects or needs a workaround. This is settled in-container before the emitter
-work, and its outcome may adjust the emitter design (only). The spike is the
-first task in the plan; it does not block the pure-Python work (§4–§7), which is
-verifiable without a renderer.
+**Prerequisite spike — a go/no-go, run first.** alphaTab is a full Guitar Pro
+renderer and the corpus files carry `Tapped`, `LeftHandTapped`, and hammer/pull
+natively, so the *model* can represent taps; the open question is whether
+melete's alphaTex *text* path exposes those effects. Settled in-container before
+the emitter work, with three outcomes:
+
+- **alphaTex expresses them** — proceed as planned; the emitter gains the note
+  effects.
+- **alphaTex cannot, but a lower-level channel can** — emit the articulations
+  through it (the corpus proves alphaTab renders them natively). This is a
+  **render-path change**, not an emitter tweak, and is re-scoped as such.
+- **No workaround exists** — articulation is deferred and the epic re-scoped.
+  The pure-Python layout work (§4–§7) still stands and is independently
+  verifiable, but a tapped *sheet* waits.
+
+The spike is the first task in the plan; it gates the emitter and the end-to-end
+deliverable, not the pure-Python work, which is verifiable without a renderer.
 
 ## 9. Error Handling
 
@@ -302,6 +326,7 @@ verifiable without a renderer.
 | `hands: 2` drawn but the family emitted fewer notes than two hands can split | Raise, naming the family and the note count. A one-note "chord" is not a two-hand exercise. |
 | The alphaTex path cannot express an articulation (spike outcome) | The emitter fails loudly on the unrepresentable note rather than emitting a plausible wrong effect. The workaround, if any, is chosen at spike time. |
 | A family emits a note already carrying `RIGHT`/`TAPPED` | Raise: families are tapping-unaware by contract, and a non-default articulation from one is a bug, not input. |
+| A rhythm accent pattern would fall on a `SLURRED` note | `restamp`'s accent pass consults `attack` and never accents a slur — a hammer-on/pull-off has no attack to accent. This is the one change tapping makes to the shared `rhythm` module. |
 
 No swallowed exceptions and no layout clamped to fit: a mislabelled sheet is
 worse than a resampled one, because the label is the part a student trusts.
@@ -338,8 +363,9 @@ across two hands is still the exercise the family drew.
 | 7 | Legato is derived from same-string adjacency, not a sampled axis. | Where a hand plays consecutive notes on one string, hammer/pull is the only idiomatic attack; deriving it keeps v1 axis-free while remaining faithful. |
 | 8 | Tapping is selected by a per-family config weight, not a free vocabulary axis. | The requirement is controllability — a deliberately tapping-heavy diet — which a low-probability free axis cannot guarantee. Recorded as a stopgap for the deferred specification mechanism. |
 | 9 | `intervals` and `chromatic` are ineligible; a tapping weight on them errors. | Nothing in the corpus taps them, and chromatic's subject *is* its left-hand fingering. Silent ineligibility would hide a config mistake. |
-| 10 | The renderer spike gates the emitter, not the pure-Python work. | §4–§7 are verifiable without a renderer; only the emitter depends on the spike outcome, so the spike need not block the bulk of the epic. |
+| 10 | The renderer spike is a go/no-go run first; it gates the emitter and the end-to-end sheet, not the pure-Python work. | §4–§7 are verifiable without a renderer, but the tapped *sheet* depends on the spike: if alphaTex cannot express the articulations and no lower-level channel substitutes, articulation is deferred and the epic re-scoped. Framing it as an emitter detail would hide a possible show-stopper until emit time. |
 | 11 | The two-hand layout deliberately departs from the family's one-hand fingering, and the multi-octave climb is only partially solved in v1. | A tapped arpeggio sits on the neck differently from the one-hand shape — that difference is the technique, not a defect — and choosing anchors for a multi-octave ascent is an open layout problem. v1 lays out what the corpus covers and raises (resamples) beyond it rather than forcing a fingering it cannot justify. |
+| 12 | In a two-hand shape every note is `TAPPED` or `SLURRED`, never `PLUCKED`. | Both hands are on the fretboard, so nothing plucks; the corpus notates the left hand inconsistently, but a tapping exercise is honest only if the low voice taps. `PLUCKED` stays purely the single-hand default. |
 
 ## 12. Deferred
 
