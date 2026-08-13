@@ -346,7 +346,8 @@ def two_hand_boxed(
 - Produces: `reach(voice, profile, hands) -> Voice`. `hands == 1` is the
   identity. `hands == 2` re-frets every note across two hands on the voice's own
   string set, stamps `hand`/`attack`, and derives legato. Preserves note count,
-  order, and the pitch multiset.
+  order, and the pitch multiset. Raises `ValueError` if any incoming note is
+  already articulated — families are tapping-unaware by contract (spec §9).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -388,6 +389,14 @@ def test_articulation_follows_the_same_string_run_rule():
     for prev, cur in zip(out, out[1:]):
         same_run = cur.string == prev.string and cur.hand == prev.hand
         assert (cur.attack is Attack.SLURRED) == same_run
+
+
+def test_rejects_a_prearticulated_note():
+    import pytest
+    voice = [Note(pitch=36, string=1, fret=8, duration=Fraction(1, 4), finger=None,
+                  accent=False, hand=Hand.RIGHT, attack=Attack.TAPPED)]
+    with pytest.raises(ValueError, match="tapping"):
+        tapping.reach(voice, BASS5, 2)
 ```
 
 - [ ] **Step 2: Run it and confirm it fails**
@@ -425,6 +434,13 @@ def reach(voice: Voice, profile: InstrumentProfile, hands: int) -> Voice:
         return list(voice)
 
     notes = list(voice)
+    for note in notes:
+        if note.hand is not Hand.LEFT or note.attack is not Attack.PLUCKED:
+            msg = (
+                f"tapping: family emitted an already-articulated note "
+                f"({note.hand}, {note.attack}); families are tapping-unaware by contract (§9)"
+            )
+            raise ValueError(msg)
     strings = tuple(sorted({note.string for note in notes}))
     places = two_hand_boxed(profile, [n.pitch for n in notes], strings,
                             "tapping", "hands and the family's string set")
