@@ -73,10 +73,12 @@ the spec; executors read both.
 ## Task 1: `LayoutHints` data contract and apex realization
 
 **Files:**
+
 - Create: `src/melete/layout.py`
 - Test: `tests/test_layout.py`
 
 **Interfaces:**
+
 - Produces: `Lever` (`enum.Enum` with members `APEX_REPEAT`, `APEX_OMIT`,
   `ADD_ONE`, `DROP_ONE`); `LayoutHints(cell: int, seam: int | None, levers:
   tuple[Lever, ...])`; `realize_lever(voice: Voice, lever: Lever, seam: int |
@@ -209,12 +211,14 @@ vrg-commit --type feat --scope layout --message "add LayoutHints and note-count 
 ## Task 2: Repeat-barline support (Score model + emitter)
 
 **Files:**
+
 - Modify: `src/melete/score.py` (the `Score` dataclass, ~line 246-253)
 - Modify: `src/melete/alphatab/emit.py` (`_exercise_directives`, `_exercise_bars`)
 - Test: `tests/test_score.py`, `tests/alphatab/test_alphatex_emit.py`
 - Create: `tests/alphatab/golden/repeat.atex`
 
 **Interfaces:**
+
 - Consumes: nothing from Task 1.
 - Produces: `Score.repeat: bool` (default `False`); when `True`, `emit_score`
   brackets the exercise's bars with alphaTab repeat tokens.
@@ -227,7 +231,7 @@ against the vendored renderer before coding:
 Run: `vrg-container-run -- node melete-render/render.js --help` (or inspect
 `melete-render/render.js` and the bundled alphaTab) and render a tiny probe:
 
-```
+```text
 \ts 4 4 \clef bass \tempo 60 \ro 0.6.4 0.6.4 0.6.4 0.6.4 | 0.6.4 0.6.4 0.6.4 0.6.4 \rc 2
 ```
 
@@ -330,10 +334,12 @@ vrg-commit --type feat --scope alphatab --message "wrap exercises in repeat barl
 ## Task 3: The fitter — tiling and the meter ladder (no levers yet)
 
 **Files:**
+
 - Modify: `src/melete/layout.py`
 - Test: `tests/test_layout.py`
 
 **Interfaces:**
+
 - Consumes: `LayoutHints` (Task 1).
 - Produces: `LayoutPlan(subdivision: str, time_signature: tuple[int, int], bars:
   int, levers_applied: tuple[Lever, ...], trace: str)`; `fit(note_count: int,
@@ -484,10 +490,12 @@ vrg-commit --type feat --scope layout --message "fit notes into whole sane bars 
 ## Task 4: The fitter — note-count levers and the fallback
 
 **Files:**
+
 - Modify: `src/melete/layout.py` (`fit`)
 - Test: `tests/test_layout.py`
 
 **Interfaces:**
+
 - Consumes: `_fit_fixed`, `Lever`, `realize_lever` (Tasks 1, 3).
 - Produces: `fit(note_count, hints)` now searches the legal levers (smallest
   effect first) before accepting an odd-but-sane count, and never returns an
@@ -638,6 +646,7 @@ vrg-commit --type feat --scope layout --message "engage note-count levers before
 ## Task 5: Widen `generate` to `(Score, LayoutHints)` across the registry
 
 **Files:**
+
 - Modify: `src/melete/families/__init__.py` (`Generate` type)
 - Modify: `src/melete/families/arpeggios.py`, `src/melete/families/intervals.py`
   (return hints)
@@ -646,6 +655,7 @@ vrg-commit --type feat --scope layout --message "engage note-count levers before
   `tests/families/test_intervals.py`
 
 **Interfaces:**
+
 - Consumes: `LayoutHints`, `Lever` (Task 1).
 - Produces: every family's `generate(profile, params)` returns `tuple[Score,
   LayoutHints]`; `Generate = Callable[[InstrumentProfile, Params], tuple[Score,
@@ -718,10 +728,12 @@ vrg-commit --type refactor --scope families --message "return LayoutHints from e
 ## Task 6: Chromatic — all-strings cycle, apex-repeat lever, hints
 
 **Files:**
+
 - Modify: `src/melete/families/chromatic.py` (`_strings`, `generate`)
 - Test: `tests/families/test_chromatic.py`
 
 **Interfaces:**
+
 - Consumes: `_shared.layout_hints`, `Lever` (Tasks 1, 5).
 - Produces: `chromatic.generate` returns `(Score, LayoutHints)` with `cell ==
   len(permutation)`; the `up_down` base cycle is the **apex-once** `there_and_back`
@@ -816,10 +828,12 @@ vrg-commit --type feat --scope chromatic --message "span all strings and emit ap
 ## Task 7: Scales — two octaves from the lowest string, `up_down` default, fallback
 
 **Files:**
+
 - Modify: `src/melete/families/scales.py` (`generate`, `_places`/traversal helpers)
 - Test: `tests/families/test_scales.py`
 
 **Interfaces:**
+
 - Consumes: `_shared.layout_hints`, `Lever` (Tasks 1, 5).
 - Produces: `scales.generate` returns `(Score, LayoutHints)`; two-octave span is
   attempted from the lowest string of `string_set`; where a `positional`
@@ -914,11 +928,13 @@ vrg-commit --type feat --scope scales --message "two octaves from the low string
 ## Task 8: Pipeline — the fitter drives meter and subdivision
 
 **Files:**
+
 - Modify: `src/melete/rhythm.py` (split sampling from restamping)
 - Modify: `src/melete/cli.py` (`_generate` pipeline: `generate → fit → restamp`)
 - Test: `tests/test_rhythm.py`, `tests/test_cli_generate.py`
 
 **Interfaces:**
+
 - Consumes: `plan_voice`, `LayoutPlan` (Task 4); `(Score, LayoutHints)` from
   families (Tasks 5-7).
 - Produces: `rhythm.restamp(voice: Voice, subdivision: str, *, note_value_pattern:
@@ -1036,6 +1052,7 @@ vrg-commit --type feat --scope pipeline --message "derive meter and subdivision 
 ## Task 9: Retire the sampled meter/subdivision axes
 
 **Files:**
+
 - Modify: `src/melete/config.py` (`_RHYTHM_AXES`)
 - Modify: `src/melete/rhythm.py` (`AXES`)
 - Modify: `src/melete/vocabulary.py` (remove `time_signature`/`subdivision`
@@ -1044,6 +1061,7 @@ vrg-commit --type feat --scope pipeline --message "derive meter and subdivision 
 - Test: `tests/test_config.py`, `tests/test_vocabulary.py`, `tests/test_rhythm.py`
 
 **Interfaces:**
+
 - Consumes: Task 8 (nothing samples these axes anymore).
 - Produces: `[pool.rhythm]` accepts only `accent_patterns` and
   `note_value_patterns`; `time_signatures`/`subdivisions` in a config are rejected
@@ -1111,6 +1129,7 @@ vrg-commit --type refactor --scope config --message "retire the sampled meter an
 (spec §9). This task records a *development-time* convention.
 
 **Files:**
+
 - Create: `MEMORY.md`
 - Modify: `docs/` (a short note on running from `build/` during development)
 - (Manual, outside the repo) remove the sibling `../sample-gp/` artifacts
@@ -1167,6 +1186,7 @@ vrg-commit --type docs --scope repo --message "record the build/ development out
 ## Task 11: Regenerate the five exercises as acceptance goldens
 
 **Files:**
+
 - Create: `tests/alphatab/golden/practice-2026-08-13/*.atex` (five exercises)
 - Test: `tests/alphatab/test_practice_goldens.py` *(new)*
 
