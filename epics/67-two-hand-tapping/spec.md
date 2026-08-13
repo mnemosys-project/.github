@@ -198,18 +198,26 @@ other field survive untouched. It reads `score.instrument` for the profile —
 here, the `profile` argument `realize` already holds — and needs nothing the
 pipeline does not already pass.
 
-1. **Partition by register.** Collect the distinct pitches of the exercise and
-   assign each to a hand — the lower band to `LEFT`, the upper band to `RIGHT`
-   — *once*, before the sequence is walked, so a pitch that recurs never
-   switches hands between repetitions (the discipline `arpeggios` already uses
-   to assign positions once). The split point is chosen so each band is boxable
-   under one hand on the chosen string set (§6); it is derived, not sampled
-   (§11, decision 6).
-2. **Box each hand.** Lay each band onto a narrow, tap-idiomatic string set —
-   the corpus stacks the shape on roughly two strings — with `LEFT` low and
-   `RIGHT` high and the fret gap between them that two-hand reach is *for*. Each
-   hand's frets must satisfy that hand's `position_span`; the union may exceed
-   one hand, which is the entire point.
+1. **Choose the tap-idiomatic layout.** Discard the family's single-hand
+   positions and re-place the pitches on a narrow string set — the corpus stacks
+   the shape on roughly two strings — under two hand anchors: the left hand
+   lower on the neck, the right hand higher, with the reach gap between them that
+   two hands exist to span. **On each string, the lower-fret notes are the left
+   hand's and the higher-fret notes are the right's** (the corpus rule, §11
+   decision 6 — not a pitch-register split, which mis-assigns interleaved
+   shapes). A pitch's placement, and therefore its hand, is fixed *once* and
+   never changes between repetitions (the discipline `arpeggios` already uses to
+   assign positions once). This layout is deliberately **not** the family's
+   traditional one-hand fingering: a minor arpeggio tapped two-handed sits on the
+   neck differently from the same arpeggio boxed under one hand, and that
+   difference *is* the technique (§11, decision 11).
+2. **Box each hand.** Each hand's assigned frets must satisfy that hand's
+   `position_span`; the union may exceed one hand, which is the entire point.
+   Where the shape spans multiple octaves it climbs the neck by repeating the
+   two-hand pattern at a higher anchor — the hardest layout case, and the one v1
+   solves only as far as the corpus data supports (§12). A shape that cannot be
+   laid out under two hands **raises** rather than forcing a bad fingering, and
+   §9's validity gate resamples.
 3. **Articulate.** Stamp each note's `hand`; the attacked notes become `TAPPED`.
 4. **Legato.** Walk each hand's notes in playing order. Within a run of
    consecutive notes on the *same string*, the first is `TAPPED` and the rest
@@ -225,12 +233,22 @@ result spans more than `profile.position_span`** (issue #57). That refusal is
 precisely the constraint two-handed tapping relaxes.
 
 The generalization keeps the single-hand behavior byte-for-byte and adds a
-two-hand mode selected by the caller. In two-hand mode the function partitions
-the pitches into a low group and a high group, boxes each within one
-`position_span`, and returns the placement together with the hand each note
-belongs to. The single-hand call is the degenerate case — one group, one hand —
-and must produce identical output to today's function for identical input; the
-existing layout tests are the guard on that claim (§10).
+two-hand mode selected by the caller. In two-hand mode the function places the
+pitches on the string set under two anchors and partitions **by neck region** —
+on each string the lower-fret notes to the left hand, the higher-fret to the
+right — boxes each hand within one `position_span`, and returns the placement
+together with the hand each note belongs to. This is a different objective from
+the single-hand travel-minimization: it is splitting a reach, not compacting
+one, and it deliberately yields a fingering the one-hand path never would. The
+single-hand call is the degenerate case — one anchor, one hand — and must
+produce identical output to today's function for identical input; the existing
+layout tests are the guard on that claim (§10).
+
+The multi-octave climb is where this is genuinely hard. A shape wider than two
+boxes has to ascend the neck by repeating the two-hand pattern at successive
+anchors, and choosing those anchors well is an open problem v1 does not fully
+solve; it lays out what the corpus data covers and raises on the rest (§12),
+never forcing a fingering it cannot justify.
 
 Placing the partition here, in the one primitive that already owns
 `position_span`, is deliberate: it is the seam a future family-supplied
@@ -316,11 +334,12 @@ across two hands is still the exercise the family drew.
 | 3 | The modifier re-lays-out (discards the family's positions), rather than only relabelling. | The signature two-hand shapes are tap-idiomatic layouts the family would never choose; relabelling alone cannot produce them. Discarding positions mirrors rhythm discarding grouping. |
 | 4 | `hand` and `attack` are two orthogonal fields, not one flat articulation enum. | Hand and attack vary independently — either hand taps, a slur occurs under either hand — and this matches GPIF's independent note properties. |
 | 5 | The partition lives in `_shared.boxed`, not in the families. | It is the one primitive that already owns `position_span`, and keeping it there lets all four families stay hand-unaware and is the seam a future family-supplied partition plugs into. |
-| 6 | The split ratio is derived from register and playability, not a sampled axis. | The corpus split (2+2, 2+1, …) falls out of boxability; an axis would multiply the variant space for no observed musical gain. Revisit if variety proves thin. |
+| 6 | Notes split to hands by **per-string fret region** (low frets → LEFT, high frets → RIGHT), derived, not a sampled axis. | Verified against the corpus note data: the exercises interleave pitch across the hands, so a pitch-register split mis-assigns them; the fret-region rule reproduces every surveyed shape and unifies arpeggios and scales under one choreography. The resulting split (2+2, 2+1, …) falls out of boxability. |
 | 7 | Legato is derived from same-string adjacency, not a sampled axis. | Where a hand plays consecutive notes on one string, hammer/pull is the only idiomatic attack; deriving it keeps v1 axis-free while remaining faithful. |
 | 8 | Tapping is selected by a per-family config weight, not a free vocabulary axis. | The requirement is controllability — a deliberately tapping-heavy diet — which a low-probability free axis cannot guarantee. Recorded as a stopgap for the deferred specification mechanism. |
 | 9 | `intervals` and `chromatic` are ineligible; a tapping weight on them errors. | Nothing in the corpus taps them, and chromatic's subject *is* its left-hand fingering. Silent ineligibility would hide a config mistake. |
 | 10 | The renderer spike gates the emitter, not the pure-Python work. | §4–§7 are verifiable without a renderer; only the emitter depends on the spike outcome, so the spike need not block the bulk of the epic. |
+| 11 | The two-hand layout deliberately departs from the family's one-hand fingering, and the multi-octave climb is only partially solved in v1. | A tapped arpeggio sits on the neck differently from the one-hand shape — that difference is the technique, not a defect — and choosing anchors for a multi-octave ascent is an open layout problem. v1 lays out what the corpus covers and raises (resamples) beyond it rather than forcing a fingering it cannot justify. |
 
 ## 12. Deferred
 
@@ -331,6 +350,9 @@ Named so the boundary is explicit and the design leaves room for each.
   family supplying its own hand-partition (a `two_hand` traversal or a
   `LayoutHints` field), which the partition-as-data seam in §6 is designed to
   accept additively.
+- **Next version.** A general solution to the multi-octave two-hand climb —
+  choosing anchors as the shape ascends the neck across many octaves. v1 handles
+  the octave range the corpus covers and raises beyond it (§6, §11 decision 11).
 - **Next version.** A demand-driven exercise-specification mechanism that lets
   the user request "arpeggios, tapping" as a first-class exercise, superseding
   the §7 config weight. This is the author's intended evolution of how melete is
