@@ -60,6 +60,7 @@ Olympians for tools the triad does not cover.
 | --- | --- | --- | --- |
 | **`melete`** | MEL-uh-tee | Practice exercise generator. Parameterized generation of bass exercises rendered to notation and tablature. | **Assigned** 2026-08-09 |
 | **`aoede`** | ay-EE-dee | Repertoire management. Acquisition, decay modeling, and maintenance scheduling for learned material. Descends from the MNEMOSYS RPM design. | **Reserved** 2026-08-09 |
+| **`urania`** | yoo-RAY-nee-uh | Performance measurement and analysis. Records a performance, compares it against the machine-readable ideal, quantifies the deviation, and localizes where playing diverged from a correct rendition. Astronomy measures the residual between a predicted position and an observed one; scoring a performance against its score is the same operation. | **Reserved** 2026-08-13 |
 
 `mneme` is conceptually the organization itself and is **not** available on
 PyPI. The org uses `mnemosys` / MNEMOS instead; `mneme` is not assigned to any
@@ -83,7 +84,7 @@ PyPI is the binding constraint — repository names in this org are all free.
 | Name | Domain | PyPI | Plausible fit |
 | --- | --- | --- | --- |
 | **Terpsichore** | dance | available | rhythm, time, groove, meter |
-| **Urania** | astronomy | available | analysis, visualization, mapping |
+| **Urania** | astronomy | **reserved** | performance measurement and analysis — assigned as the third tool (§3) |
 | **Erato** | lyric and love poetry | available | composition, songwriting |
 | **Melpomene** | tragedy | available | — |
 | **Thalia** | comedy, idyllic poetry | available | — |
