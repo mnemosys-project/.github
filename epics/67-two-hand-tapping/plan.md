@@ -76,13 +76,13 @@ green afterwards.
 
 ---
 
-# Phase A — Data model and renderer feasibility
+## Phase A — Data model and renderer feasibility
 
 Delivers the `Note` fields everything else reads and writes, and settles the one
 external unknown (whether alphaTex can express taps) before any rendering work
 is scheduled.
 
-## Task A1: Renderer feasibility spike (go/no-go)
+### Task A1: Renderer feasibility spike (go/no-go)
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** —
@@ -92,9 +92,11 @@ epic, that the emitter task (D1) consumes. It is first because a hard failure
 re-scopes the epic (spec §8).
 
 **Files:**
+
 - Create: `docs/reports/alphatex-tapping-effects.md`
 
 **Interfaces:**
+
 - Produces: a table of the exact alphaTex note-effect tokens for **right-hand
   tap**, **left-hand tap**, **hammer-on**, **pull-off**, and **right-hand
   fingering** (or the finding that a token does not exist), plus a verdict:
@@ -123,16 +125,18 @@ re-scopes the epic (spec §8).
 - [ ] **Step 4: Commit**
   `vrg-commit --type docs --scope reports --message "record alphaTex tapping-effect feasibility (#67)"`
 
-## Task A2: `Hand` and `Attack` on `Note`
+### Task A2: `Hand` and `Attack` on `Note`
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** —
 
 **Files:**
+
 - Modify: `src/melete/score.py`
 - Test: `tests/test_score.py`
 
 **Interfaces:**
+
 - Produces: `class Hand(Enum)` with members `LEFT`, `RIGHT`; `class Attack(Enum)`
   with members `TAPPED`, `PLUCKED`, `SLURRED`; two new `Note` fields
   `hand: Hand = Hand.LEFT` and `attack: Attack = Attack.PLUCKED`, appended after
@@ -200,20 +204,22 @@ class Attack(Enum):
 
 ---
 
-# Phase B — Layout and the tapping modifier
+## Phase B — Layout and the tapping modifier
 
 The pure core. Verifiable entirely without a renderer.
 
-## Task B1: Two-hand boxing in `_shared`
+### Task B1: Two-hand boxing in `_shared`
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** A2
 
 **Files:**
+
 - Modify: `src/melete/families/_shared.py`
 - Test: `tests/families/test_shared_two_hand.py`
 
 **Interfaces:**
+
 - Consumes: `melete.instrument.positions`, `melete.instrument.hand_span`,
   `_shared._reachable`, `melete.score.Hand`.
 - Produces:
@@ -331,16 +337,18 @@ def two_hand_boxed(
 - [ ] **Step 5: REFACTOR** (see the standing step), then commit
   `vrg-commit --type feat --scope families --message "add two_hand_boxed to _shared (#67)"`
 
-## Task B2: The `tapping.reach` modifier
+### Task B2: The `tapping.reach` modifier
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** B1
 
 **Files:**
+
 - Create: `src/melete/tapping.py`
 - Test: `tests/test_tapping.py`
 
 **Interfaces:**
+
 - Consumes: `two_hand_boxed` (B1); `melete.score.Note`, `Hand`, `Attack`,
   `Voice`; `melete.instrument.InstrumentProfile`.
 - Produces: `reach(voice, profile, hands) -> Voice`. `hands == 1` is the
@@ -463,16 +471,18 @@ def reach(voice: Voice, profile: InstrumentProfile, hands: int) -> Voice:
 - [ ] **Step 5: REFACTOR** (see the standing step), then commit
   `vrg-commit --type feat --scope tapping --message "add the tapping.reach modifier (#67)"`
 
-## Task B3: Wire `tapping.reach` into `pipeline.realize`
+### Task B3: Wire `tapping.reach` into `pipeline.realize`
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** B2
 
 **Files:**
+
 - Modify: `src/melete/pipeline.py`
 - Test: `tests/test_pipeline.py`
 
 **Interfaces:**
+
 - Consumes: `tapping.reach` (B2); the existing `pipeline.realize` stages.
 - Produces: `realize` runs `tapping.reach(adjusted, profile, hands)` between
   `layout.plan_voice` and `rhythm.restamp`, reading `hands` from `params` with a
@@ -529,18 +539,20 @@ from melete import layout, rhythm, tapping   # add tapping
 
 ---
 
-# Phase C — Selection, configuration, and the rhythm interaction
+## Phase C — Selection, configuration, and the rhythm interaction
 
-## Task C1: The `hands` axis in configuration (eligibility + opt-in default)
+### Task C1: The `hands` axis in configuration (eligibility + opt-in default)
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** —
 
 **Files:**
+
 - Modify: `src/melete/config.py`
 - Test: `tests/test_config.py`
 
 **Interfaces:**
+
 - Produces: a `hands` integer axis (universe `(1, 2)`) added to the config axis
   list for `arpeggios` and `scales` only, following the existing `range_octaves`
   integer-axis precedent (`_AXES_BY_FAMILY`, the integer `_Axis` element).
@@ -593,7 +605,7 @@ required keys.)
 - [ ] **Step 5: REFACTOR** (see the standing step), then commit
   `vrg-commit --type feat --scope config --message "add the opt-in hands axis for arpeggios and scales (#67)"`
 
-## Task C2: Draw `hands` in selection
+### Task C2: Draw `hands` in selection
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** C1
@@ -601,11 +613,13 @@ required keys.)
 `scales.AXES`.
 
 **Files:**
+
 - Modify: `src/melete/families/arpeggios.py` (append `"hands"` to `AXES`)
 - Modify: `src/melete/families/scales.py` (append `"hands"` to `AXES`)
 - Test: `tests/test_selection.py`
 
 **Interfaces:**
+
 - Consumes: `config.pool[family].values["hands"]` (C1); the existing
   `_sample`/`_candidates` machinery.
 - Produces: every sampled `arpeggios`/`scales` spec carries a `hands` value in
@@ -639,16 +653,18 @@ def test_sampled_arpeggio_spec_carries_hands(min_config_hands_off):
 - [ ] **Step 5: REFACTOR** (see the standing step), then commit
   `vrg-commit --type feat --scope selection --message "draw the hands axis for the eligible families (#67)"`
 
-## Task C3: `restamp` never accents a slurred note
+### Task C3: `restamp` never accents a slurred note
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** A2
 
 **Files:**
+
 - Modify: `src/melete/rhythm.py`
 - Test: `tests/test_rhythm.py`
 
 **Interfaces:**
+
 - Consumes: `melete.score.Attack` (A2).
 - Produces: `restamp` clears any accent it would otherwise stamp on a
   `SLURRED` note — an accent marks an attack, a slur has none (spec §9).
@@ -702,18 +718,20 @@ duration=…, accent=…)` site (`rhythm.py:174-177`) consumes `accents`. Import
 
 ---
 
-# Phase D — Rendering and integration
+## Phase D — Rendering and integration
 
-## Task D1: Emit `hand`/`attack` as alphaTex note effects
+### Task D1: Emit `hand`/`attack` as alphaTex note effects
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** A1 (tokens), A2 (fields)
 
 **Files:**
+
 - Modify: `src/melete/alphatab/emit.py`
 - Test: `tests/alphatab/test_emit_tapping.py`
 
 **Interfaces:**
+
 - Consumes: the confirmed token table from A1; `melete.score.Hand`, `Attack`.
 - Produces: `_note_token` appends, into its `effects` list, the tap effect for a
   `TAPPED` note (right- vs left-hand per `note.hand`), the hammer/pull effect for
@@ -777,15 +795,17 @@ values come from Task A1's findings note.)
 - [ ] **Step 5: REFACTOR** (see the standing step), then commit
   `vrg-commit --type feat --scope alphatab --message "emit hand/attack as alphaTex effects (#67)"`
 
-## Task D2: End-to-end tapped-sheet integration test
+### Task D2: End-to-end tapped-sheet integration test
 
 **Repo:** `mnemosys-project/melete`
 **Blocked-by:** B3, C2, C3, D1
 
 **Files:**
+
 - Test: `tests/test_tapping_end_to_end.py`
 
 **Interfaces:**
+
 - Consumes: the whole pipeline through the renderer.
 - Produces: a black-box test that a `hands: 2` arpeggio config generates and
   renders to a valid `.gp` whose `Content/score.gpif` carries the `Tapped`
@@ -823,7 +843,7 @@ def test_two_hand_arpeggio_renders_a_tapped_gp(tmp_path):
 
 ---
 
-# Task Summary
+## Task Summary
 
 | # | Task | Repo | Blocked-by |
 |---|---|---|---|
