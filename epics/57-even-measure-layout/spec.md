@@ -204,7 +204,10 @@ Candidates are ranked lexicographically:
 4. **Even bar count** `M`, and among even options the split whose **bar boundary
    lands on the musical seam** (the `LayoutHints` seam index) — for an up/down
    pattern the turnaround, so line 1 is the ascent and line 2 the descent.
-5. **Fewest levers used.** Among ties, prefer the candidate that changed the note
+5. **Larger beats-per-bar** `b`. Among candidates still tied after seam alignment,
+   prefer the larger `b` — fuller bars, fewer lines (e.g. `4/4 × 4` over
+   `2/4 × 8` for the same 16 beats).
+6. **Fewest levers used.** Among ties, prefer the candidate that changed the note
    count least (ideally not at all).
 
 **Sane-`b` outranks even-`M`, and the lever fires before either is sacrificed.**
@@ -305,12 +308,14 @@ among the corner cases we expect to tune; the **meter decisions** below are the
 target.
 
 **01 — Chromatic 1-2-4-3, all six strings, up and down.**
-Cell `g = 4` (fingers/string). Cycle: 6 strings up + 6 strings down with the apex
-string repeated = **48 notes** → `B = 12` beats of four sixteenths (`d = 4`).
-Divisor pairs of 12 with even `M`: `6/4 × 2`, `3/4 × 4`, `2/4 × 6`. Ladder picks
+Cell `g = 4` (fingers/string). **Base cycle** (apex once): `there_and_back` over 6
+strings = 11 string-groups × 4 = **44 notes** → `B = 11` beats, a prime with no
+sane `b` — so the fitter **engages `APEX_REPEAT`** (repeat the apex string's
+4-note cell) → **48 notes** → `B = 12` beats of four sixteenths (`d = 4`). Divisor
+pairs of 12 with even `M`: `6/4 × 2`, `3/4 × 4`, `2/4 × 6`. Ladder picks
 **6/4 × 2** — the bar boundary lands exactly on the turnaround (bar 1 = ascent,
-bar 2 = descent); `3/4 × 4` is the acceptable alternative. No lever needed. Wrap
-in repeat.
+bar 2 = descent); `3/4 × 4` is the acceptable alternative. This is the exemplar of
+the apex lever doing its job. Wrap in repeat.
 
 **02 — A♭ Ionian, positional, two octaves, up and down.**
 Positional two-octave fingering → unequal per-string groups → **uniform-pulse
@@ -346,27 +351,38 @@ stubborn, wrap in repeats.
 ## 9. Output-directory cleanup and the build/ convention
 
 The Aug 12 artifacts were written to a **sibling directory that is a separate git
-repository** (`../sample-gp/`). Generated practice output must never land there.
+repository** (`../sample-gp/`). This is a **development-time discipline problem,
+not a code defect** — and the fix is a convention, not a pipeline change.
 
-- **Route generated output to a gitignored `build/` directory** — the active
-  worktree's `build/` (lives and dies with the worktree) or the baseline repo's
-  `build/` on `develop` for shareable output. Update the CLI/session writer
-  accordingly and ensure `build/` is gitignored.
-- **Remove the misplaced artifacts** and stop the pattern that produced them.
+- **The code's runtime behavior is correct and stays as-is.** `melete generate`
+  writes to `./sessions/<date>/` relative to the current working directory. That
+  is fine and this epic does **not** change it.
+- **The discipline: run melete from within `build/` during development.** When we
+  run the generator inside the repo as part of the work, we run it from the
+  gitignored `build/` directory so artifacts land in `build/sessions/…`. We stop
+  dropping generated results into the repo base directory or — as happened — a
+  sibling git repository.
 - **Assert the convention in the repo `MEMORY.md`** (repo is public; this is
   melete-specific). Proposed entry:
 
-  > **Generated output goes to `build/`, never to temp or sibling repos.**
-  > melete's generated practice artifacts (`.gp`, `.atex`, `session.json`,
-  > rendered examples) must be written to a gitignored `build/` directory — the
-  > active worktree's `build/`, or the baseline repo's `build/` on `develop` for
-  > shareable output. Never write them to the VM scratchpad/temp (invisible from
-  > the user's macOS host) or into sibling directories one level above the repo
-  > (those are separate git repositories). This is what produced the `sample-gp/`
-  > mistake.
+  > **In development, run melete from `build/`; never write generated artifacts to
+  > the repo base or a sibling repo.** melete's runtime writes generated practice
+  > artifacts (`.gp`, `.atex`, `session.json`) to `./sessions/<date>/` relative to
+  > the working directory — this is intentional and unchanged. When running the
+  > generator inside the repo during development, run it from the gitignored
+  > `build/` directory so output lands in `build/sessions/…`. Never write
+  > generated artifacts into the repo base directory, the VM scratchpad/temp
+  > (invisible from the user's macOS host), or a sibling directory one level above
+  > the repo (those are separate git repositories — the `sample-gp/` mistake).
 
-This is a tactical cleanup task within the epic; the `MEMORY.md` write follows the
-repo's human-approval memory policy (already granted for this entry).
+This is a documentation + memory task within the epic (no code change to the
+output path); the `MEMORY.md` write follows the repo's human-approval memory
+policy (already granted for this entry).
+
+**Acknowledged out of scope (future rethink).** The flat-file `sessions/` model,
+and the way exercise selection depends on *past* sessions, is good enough to start
+but will not scale once months of session directories accumulate — that data
+-management redesign is a separate future effort, not part of this epic.
 
 ## 10. Testing strategy
 

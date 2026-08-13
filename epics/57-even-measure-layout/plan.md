@@ -165,18 +165,25 @@ class LayoutHints:
             raise ValueError(msg)
 
 
-def realize_lever(voice: Voice, lever: Lever, seam: int | None) -> Voice:
-    """Apply ``lever`` to ``voice``, returning a new list (spec §4.6)."""
+def realize_lever(voice: Voice, lever: Lever, seam: int | None, cell: int = 1) -> Voice:
+    """Apply ``lever`` to ``voice``, returning a new list (spec §4.6).
+
+    Apex levers act on a whole *cell* — the ``cell`` notes ending at ``seam`` —
+    so repeating the apex of a 4-note chromatic group adds four notes, while a
+    single-note scale apex (``cell=1``) adds one. ``ADD_ONE``/``DROP_ONE`` always
+    act on a single trailing note.
+    """
     if lever is Lever.APEX_REPEAT:
         if seam is None:
             msg = "APEX_REPEAT needs a seam index; none was supplied"
             raise ValueError(msg)
-        return [*voice[: seam + 1], voice[seam], *voice[seam + 1 :]]
+        apex = voice[seam - cell + 1 : seam + 1]
+        return [*voice[: seam + 1], *apex, *voice[seam + 1 :]]
     if lever is Lever.APEX_OMIT:
         if seam is None:
             msg = "APEX_OMIT needs a seam index; none was supplied"
             raise ValueError(msg)
-        return [*voice[:seam], *voice[seam + 1 :]]
+        return [*voice[: seam - cell + 1], *voice[seam + 1 :]]
     if lever is Lever.ADD_ONE:
         return [*voice, voice[-1]]
     if lever is Lever.DROP_ONE:
@@ -583,7 +590,7 @@ def plan_voice(voice: Voice, hints: LayoutHints) -> tuple[Voice, LayoutPlan]:
     plan = fit(len(voice), hints)
     adjusted = list(voice)
     for lever in plan.levers_applied:
-        adjusted = realize_lever(adjusted, lever, hints.seam)
+        adjusted = realize_lever(adjusted, lever, hints.seam, hints.cell)
     return adjusted, plan
 ```
 
@@ -717,7 +724,9 @@ vrg-commit --type refactor --scope families --message "return LayoutHints from e
 **Interfaces:**
 - Consumes: `_shared.layout_hints`, `Lever` (Tasks 1, 5).
 - Produces: `chromatic.generate` returns `(Score, LayoutHints)` with `cell ==
-  len(permutation)`, a seam at the ascending-half length for `up_down`, and
+  len(permutation)`; the `up_down` base cycle is the **apex-once** `there_and_back`
+  (the apex string's cell is NOT pre-repeated — that is the fitter's
+  `APEX_REPEAT` lever), with `seam` at the last note of the ascending half and
   `levers=(Lever.APEX_REPEAT, Lever.APEX_OMIT)`. When the profile requests it, the
   chromatic string walk spans **all** strings.
 
@@ -726,9 +735,9 @@ vrg-commit --type refactor --scope families --message "return LayoutHints from e
 ```python
 # tests/families/test_chromatic.py  (add)
 from melete.instrument import PROFILES
-from melete.layout import Lever
+from melete.layout import Lever, plan_voice
 
-def test_chromatic_up_down_spans_all_six_strings_with_apex_repeat_hint():
+def test_chromatic_all_strings_baseline_is_apex_once_fitter_reaches_48():
     profile = PROFILES["bass6"]
     params = {  # all-strings, up_down, adjacent, 1-2-4-3
         "permutation": "1_2_4_3", "start_string": "0", "start_fret": "1",
@@ -736,47 +745,55 @@ def test_chromatic_up_down_spans_all_six_strings_with_apex_repeat_hint():
         "shift": "none", "span": "all",
     }
     score, hints = chromatic.generate(profile, params)
-    # 6 strings up + 6 down (apex string repeated) x 4 fingers = 48 notes
-    assert len(score.voice) == 48
+    # BASE cycle: there_and_back over 6 strings = 11 string-groups x 4 = 44 notes
+    assert len(score.voice) == 44
     assert hints.cell == 4
-    assert Lever.APEX_REPEAT in hints.levers
-    assert hints.seam == 24
+    assert hints.levers == (Lever.APEX_REPEAT, Lever.APEX_OMIT)
+    assert hints.seam == 23                     # last note of the 6-string ascent
+    # the FITTER, not the family, repeats the apex cell to reach a clean fit:
+    fitted, plan = plan_voice(score.voice, hints)
+    assert len(fitted) == 48                    # APEX_REPEAT added the 4-note apex cell
+    assert plan.levers_applied == (Lever.APEX_REPEAT,)
+    assert plan.time_signature == (6, 4)
+    assert plan.bars == 2
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `vrg-container-run -- python -m pytest tests/families/test_chromatic.py -q`
-Expected: FAIL — no `"all"` span; `generate` returns a bare Score; 48 not reached.
+Expected: FAIL — no `"all"` span; `generate` returns a bare Score.
 
 - [ ] **Step 3: Implement**
 
-Allow `span == "all"` to mean "every string from `start_string`," and build the
-turnaround so the apex string is repeated (matching the `LayoutHints.seam`). In
-`_strings`, resolve an `"all"` span to the string count:
+Allow `span == "all"` to mean "every string from `start_string`," and keep the
+apex-once turnaround (`there_and_back`) as the base cycle — the fitter, not the
+family, decides whether to repeat the apex. In `_strings`, resolve `"all"` to the
+string count and leave `up_down` on `there_and_back`:
 
 ```python
 def _strings(direction, traversal, start_string, span, string_count):
     step = -_STRING_STEP[traversal] if direction == "down" else _STRING_STEP[traversal]
     reach = string_count if span == "all" else span
     walk = [start_string + cycle * step for cycle in range(reach)]
-    # up_down repeats the apex string (spec §6): [s0..sN, sN..s0]
-    return [*walk, *reversed(walk)] if direction == "up_down" else walk
+    return there_and_back(walk) if direction == "up_down" else walk   # apex once
 ```
 
-*(Note: this changes `up_down` from `there_and_back` (apex once) to apex-repeated,
-because the apex-repeat is now the fitter's lever baseline for chromatic. `span`
-becomes a value that may be an int-string or `"all"`; read it via
-`read.value("span")` and branch. `string_count = len(profile.tuning)`.)*
+*(`span` may now be an int-string or `"all"`; read it via `read.value("span")` and
+branch. `string_count = len(profile.tuning)`. The base cycle is unchanged in kind
+from today — `there_and_back` — only the reach widens to all strings.)*
 
 In `generate`, compute `permutation`, build `strings` with `string_count`, then
-return hints:
+return hints. The seam is the last note of the ascending half; for a
+`there_and_back` of `reach` strings the ascent is `reach` string-groups, so the
+apex note is at index `reach * cell - 1`:
 
 ```python
     permutation = _permutation(read)
+    reach = len(profile.tuning) if span == "all" else int(span)
     strings = _strings(direction, traversal, start_string, span, len(profile.tuning))
     # ... positions/voice as today ...
     cell = len(permutation)
-    seam = (len(strings) // 2) * cell if direction == "up_down" else None
+    seam = reach * cell - 1 if direction == "up_down" else None
     hints = _shared.layout_hints(cell=cell, seam=seam,
                                  levers=(Lever.APEX_REPEAT, Lever.APEX_OMIT))
     return Score(..., time_signature=DEFAULT_TIME_SIGNATURE, ...), hints
@@ -1087,20 +1104,25 @@ vrg-commit --type refactor --scope config --message "retire the sampled meter an
 
 ---
 
-## Task 10: Output-directory convention and repo `MEMORY.md`
+## Task 10: Development output discipline and repo `MEMORY.md`
+
+**No code change to the output path.** `melete generate` writing to
+`./sessions/<date>/` relative to the working directory is correct and stays
+(spec §9). This task records a *development-time* convention.
 
 **Files:**
 - Create: `MEMORY.md`
-- Modify: `docs/` (a short note on the `build/` convention, in the CLI/usage doc)
+- Modify: `docs/` (a short note on running from `build/` during development)
 - (Manual, outside the repo) remove the sibling `../sample-gp/` artifacts
 
 **Interfaces:** none (documentation + memory).
 
-- [ ] **Step 1: Confirm `build/` is gitignored and `sessions/` remains the output home**
+- [ ] **Step 1: Confirm `build/` is gitignored (no path reroute needed)**
 
 Run: `vrg-container-run -- grep -n "build/\|sessions/" .gitignore`
-Expected: both present. No `.gitignore` change is needed — `build/` (line ~17)
-and `sessions/` (line ~38) are already ignored.
+Expected: both present. No `.gitignore` and no CLI/path change — the runtime
+behavior is intentionally unchanged; the discipline is *where we run* the
+generator in development.
 
 - [ ] **Step 2: Create `MEMORY.md` with the human-approval policy header and the entry**
 
@@ -1108,21 +1130,23 @@ Use the vergil policy header (via `/vergil:memory-init` if available, or write i
 directly), then add the approved entry:
 
 ```markdown
-- **Generated output goes to `build/` (or `sessions/`), never to temp or sibling
-  repos.** melete's generated practice artifacts (`.gp`, `.atex`, `session.json`,
-  rendered examples) are written under the repo's gitignored output dirs —
-  `sessions/<date>/` for a normal run, or `build/` for shareable exemplars. Never
-  write them to the VM scratchpad/temp (invisible from the user's macOS host) or
-  into sibling directories one level above the repo (those are separate git
-  repositories). Writing exemplars into `../sample-gp/` is the mistake this
-  prevents.
+- **In development, run melete from `build/`; never write generated artifacts to
+  the repo base or a sibling repo.** Runtime writes generated practice artifacts
+  (`.gp`, `.atex`, `session.json`) to `./sessions/<date>/` relative to the working
+  directory — intentional and unchanged. When running the generator inside the
+  repo during development, run it from the gitignored `build/` directory so output
+  lands in `build/sessions/…`. Never write generated artifacts into the repo base
+  directory, the VM scratchpad/temp (invisible from the user's macOS host), or a
+  sibling directory one level above the repo (those are separate git repositories
+  — the `sample-gp/` mistake). The flat-file `sessions/` model is acknowledged
+  tech debt to be rethought for scale in a future effort.
 ```
 
-- [ ] **Step 3: Add the `build/` convention to the docs**
+- [ ] **Step 3: Add the convention to the docs**
 
 In the CLI/usage doc (e.g. `docs/reference/cli.md` or wherever `generate`'s output
-paths are documented), add a sentence: shareable exemplars belong in `build/`;
-`sessions/<date>/` is the per-run output; neither is committed.
+paths are documented), add a sentence: during development run melete from `build/`
+so artifacts land in `build/sessions/<date>/`; never commit generated output.
 
 - [ ] **Step 4: Remove the misplaced sibling artifacts (manual)**
 
@@ -1135,7 +1159,7 @@ from an agent session without explicit confirmation.
 
 ```bash
 vrg-git add MEMORY.md docs/
-vrg-commit --type docs --scope repo --message "assert the build/ output convention in memory (#57)"
+vrg-commit --type docs --scope repo --message "record the build/ development output discipline in memory (#57)"
 ```
 
 ---
