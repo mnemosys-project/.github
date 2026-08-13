@@ -58,10 +58,12 @@ re-implementing arpeggio and scale geometry inside a new family.
 
 ### In scope
 
-- A `tapping` module exposing `apply(score, params) -> Score`, structurally
-  parallel to `rhythm.apply`: it reads its own axes from the shared parameter
-  mapping, rebuilds the `Score` with `dataclasses.replace` so untouched fields
-  (notably `key`) survive, and is pure — no I/O, no clock, no randomness.
+- A `tapping` module exposing a pure `Voice -> Voice` transform, given the
+  profile and the drawn `hands` value — structurally parallel to
+  `rhythm.restamp` and wired into `pipeline.realize` alongside it. It preserves
+  the note count and order, changing only each note's `string`, `fret`, `hand`,
+  and `attack`, so the single `replace` that rebuilds the `Score` stays
+  `pipeline.realize`'s job. Pure — no I/O, no clock, no randomness.
 - Two new orthogonal `Note` fields: `hand` (`LEFT | RIGHT`) and `attack`
   (`TAPPED | PLUCKED | SLURRED`), plus the generalization of `finger` from
   "left hand 1–4" to "finger 1–4 of `hand`". `PLUCKED` and `LEFT` are the
@@ -106,35 +108,46 @@ the exercises can assume a player who already taps.
 
 ## 3. Architecture
 
-The tapping modifier is a peer of the rhythm modifier in the §4 pipeline. The
-selector draws a family's parameters, the family generates a `Score`, and then
-the cross-cutting modifiers run:
+`pipeline.realize` is the one place the renderer-agnostic stages are wired
+together — it is what both `cli._score` and the selector's validity gate call.
+Tapping is a new stage inserted into that composition:
 
 ```text
-selection ─▶ family.generate ─▶ tapping.apply ─▶ rhythm.apply ─▶ Score
-              (which/where)      (which hand,       (when)
-                                  where, attack)
+pipeline.realize:
+  family.generate ─▶ layout.plan_voice ─▶ tapping ─▶ rhythm.restamp ─▶ replace ─▶ Score
+   (which/where)      (fitter: meter,      (which hand,   (when)          (one place
+                       subdivision,         where,                         rebuilds
+                       tile into bars)      attack)                        the Score)
 ```
 
-**Ordering: tapping before rhythm.** Tapping decides positions and articulation
-from pitch and profile; rhythm restamps durations and accents and carries
-everything else through untouched. Tapping must run first because its legato
-derivation reads note *adjacency on a string*, which rhythm does not disturb,
-while tapping changes `string`/`fret`, which rhythm must not predate. Both can
-reject a draw, and §9's validity gate resamples — the existing contract.
+The family and the two existing modifiers are unchanged; tapping is a new
+`Voice -> Voice` transform slotted between the fitter and the rhythm restamp,
+and `realize` performs the single `replace` at the end for all of them.
+
+**Ordering: after the fitter, before rhythm.** The **fitter**
+(`layout.plan_voice`, §4) derives the meter and subdivision and may add or drop
+notes (its levers) to tile the cycle into whole bars — so tapping runs *after*
+it, articulating the sequence that is actually played rather than the one the
+family first proposed. Tapping runs *before* `rhythm.restamp` because rhythm
+stamps accents and a `SLURRED` note must not be accented (§9); running tapping
+first is what lets the restamp see which notes are slurred. Tapping changes
+`string`/`fret`/`hand`/`attack` and preserves note count and order, so it
+neither disturbs the fitter's tiling nor invalidates the `LayoutHints` the
+fitter consumed. Any stage may raise, and §9's validity gate resamples — the
+existing contract.
 
 **The load-bearing boundaries.**
 
-- **The modifier boundary.** `tapping.apply` is the only module that knows a
-  note can be tapped or fretted by the right hand. Families remain
-  tapping-ignorant; they emit `hands: 1`-shaped Scores with `LEFT`/`PLUCKED`
-  notes, and the modifier rewrites them when `hands == 2`. This is what lets the
-  four families stay unchanged in substance.
-- **The pitch/position seam.** Tapping consumes the family's *pitches* and
-  discards its *positions*, exactly as rhythm discards the family's grouping.
-  This is the seam that makes tapping a modifier rather than a family: the
-  family need not know a tap-idiomatic layout exists, and the modifier need not
-  know which arpeggio produced the pitches.
+- **The modifier boundary.** The `tapping` module is the only one that knows a
+  note can be tapped or fretted by the right hand. Families stay
+  tapping-ignorant; they emit `LEFT`/`PLUCKED` notes, and the modifier rewrites
+  them when `hands == 2` (and is the identity when `hands == 1`). This is what
+  lets the four families stay unchanged in substance.
+- **The pitch/position seam.** Tapping consumes the family's (fitter-adjusted)
+  *pitches* and discards their *positions*, exactly as rhythm discards the
+  family's grouping. This is the seam that makes tapping a modifier rather than
+  a family: the family need not know a tap-idiomatic layout exists, and the
+  modifier need not know which arpeggio produced the pitches.
 - **`_shared.boxed` as the one hand-aware layout primitive.** The generalization
   from one hand to two lives in exactly one function, shared with the families'
   single-hand path (§6). Nothing else counts hands.
@@ -176,13 +189,14 @@ note-for-note.
 
 ## 5. The tapping modifier
 
-`apply(score, params) -> Score` is a no-op when the drawn `hands` axis is `1`:
-it returns the score unchanged, so a family that opted out or a draw that came
-up single-handed pays nothing. When `hands == 2` it rebuilds the voice in four
-pure steps, then returns `replace(score, voice=…)` so `key`, `tempo_range`,
-`instrument`, and every other field survive (the rhythm module's `replace`
-discipline, and for the same reason — a hand-built `Score` here would silently
-drop the key and mis-spell every note).
+The transform — `tapping.reach(voice, profile, hands) -> Voice` — is the
+identity when the drawn `hands` value is `1`: it returns the voice unchanged, so a family that opted out or a draw that came up
+single-handed pays nothing. When `hands == 2` it rebuilds the voice in four pure
+steps and returns the new voice; `pipeline.realize` carries it into the `Score`
+with its single `replace`, so `key`, `tempo_range`, `instrument`, and every
+other field survive untouched. It reads `score.instrument` for the profile —
+here, the `profile` argument `realize` already holds — and needs nothing the
+pipeline does not already pass.
 
 1. **Partition by register.** Collect the distinct pitches of the exercise and
    assign each to a hand — the lower band to `LEFT`, the upper band to `RIGHT`
@@ -202,9 +216,6 @@ drop the key and mis-spell every note).
    are `SLURRED` — a hammer-on where the fret ascends, a pull-off where it
    descends. Any string change forces a fresh `TAPPED`. This is derived from
    geometry, not a separate axis (§11, decision 7).
-
-The modifier reads `score.instrument` for the profile it needs to place notes,
-so it requires nothing the `Score` does not already carry.
 
 ## 6. Layout: one or two hands
 
@@ -268,7 +279,7 @@ verifiable without a renderer.
 
 | Failure | Behavior |
 |---|---|
-| A two-hand spec whose pitches cannot partition into two boxable hands | `tapping.apply` raises, naming the pitches and the profile; §9's validity gate resamples. Never clamped to fit. |
+| A two-hand spec whose pitches cannot partition into two boxable hands | `tapping.reach` raises, naming the pitches and the profile; §9's validity gate resamples. Never clamped to fit. |
 | A tapping weight configured for `intervals`/`chromatic` | Configuration error at load, naming the family and that it is not tapping-eligible. Never silently dropped. |
 | `hands: 2` drawn but the family emitted fewer notes than two hands can split | Raise, naming the family and the note count. A one-note "chord" is not a two-hand exercise. |
 | The alphaTex path cannot express an articulation (spike outcome) | The emitter fails loudly on the unrepresentable note rather than emitting a plausible wrong effect. The workaround, if any, is chosen at spike time. |
@@ -284,7 +295,7 @@ worse than a resampled one, because the label is the part a student trusts.
 | `Note` defaults | Unit: a default-constructed note is `(LEFT, PLUCKED)`; existing family tests unchanged. |
 | `_shared.boxed` single-hand | Regression: identical output to pre-change for every existing input (the central guard). |
 | `_shared.boxed` two-hand | Property: each returned hand's span ≤ `position_span`; every note on a string that sounds its pitch; partition assigns each pitch one hand. |
-| `tapping.apply` purity | Property: same score + params ⇒ same score; `hands: 1` is identity; `key` survives `replace`. |
+| `tapping.reach` purity | Property: same voice + profile + hands ⇒ same voice; `hands: 1` is identity; the pitch multiset is preserved. |
 | Partition consistency | A recurring pitch is assigned the same hand on every occurrence. |
 | Legato derivation | Golden: same-string ascending run ⇒ one `TAPPED` then `SLURRED` hammers; descending ⇒ pull-offs; string change ⇒ fresh `TAPPED`. |
 | Emitter | Golden alphaTex for one tapped arpeggio and one tapped scale, byte-compared. |
@@ -292,7 +303,7 @@ worse than a resampled one, because the label is the part a student trusts.
 
 **Central invariant.** `pitch == tuning[string] + fret` holds for every note the
 modifier emits — tapping moves position but never changes pitch. The property
-test on `tapping.apply` that asserts the multiset of pitches is identical before
+test on `tapping.reach` that asserts the multiset of pitches is identical before
 and after is the one that proves the hardest claim in the spec: that a re-layout
 across two hands is still the exercise the family drew.
 
