@@ -88,7 +88,7 @@ A task is not complete until this step has run and its tests are green afterward
 | `src/melete/families/journey.py` *(new)* | The shared one-hand journey: outer-to-outer ascending placement per fingering style, then the up-and-down retrograde | B1 |
 | `src/melete/families/arpeggio_shapes.py` *(new)* | Canonical seed shape per chord quality + inversion/position derivation | C1 |
 | `src/melete/families/scales.py` | Compute the journey; drop `direction`/`string_set`/`range_octaves` | B2, E2 |
-| `src/melete/families/arpeggios.py` | Compute the journey from seed shapes; drop the three axes | C2, E2 |
+| `src/melete/families/arpeggios.py` | Compute the journey from seed shapes; drop `direction`/`string_set`/`range_octaves` and the now-redundant `traversal` axis | C2, E2 |
 | `src/melete/families/chromatic.py` | Coherent outer-string-to-outer-string up-and-down traversal; drop `direction` | D1, E2 |
 | `src/melete/families/intervals.py` | Same geometry treatment; drop `direction`/`string_set` | D2, E2 |
 | `src/melete/selection.py` | Anchor `root` on the lowest instrument string (`_realized`) | E1 |
@@ -149,6 +149,14 @@ def test_box_raises_when_wider_than_one_position():
     with pytest.raises(ValueError, match="scales"):
         box(BASS6, [23, 35, 47], strings=(0, 1, 2), anchors=(0,),
             family="scales", axes="root, scale_type")
+
+
+def test_open_string_is_a_valid_position(spec_decision_5=True):
+    # B0=23 is the open low string. Anchored at the nut, box must place it at
+    # fret 0, not reject it — open strings are computed, not special-cased.
+    places = box(BASS6, [23], strings=(0, 1, 2, 3, 4, 5), anchors=(0,),
+                 family="scales", axes="root")
+    assert places == [(0, 0)]
 
 
 def test_two_anchor_box_is_the_67_seam():
@@ -546,10 +554,13 @@ def test_off_neck_tone_raises():
   `theory.chord_pitches`.
 - Produces: `arpeggios.generate` unchanged in signature; the voice is the
   up-and-down seed-shape journey to the top string; `AXES` drops `string_set`,
-  `range_octaves`, `direction` and keeps `root`, `quality`, `inversion`,
-  `traversal`, `pattern`. `positional` and `across_strings` collapse to the single
-  seed-shape layout (positional stays a name if the pool still drills it, but both
-  route through `shape_places`); `single_string` is removed (deferred).
+  `range_octaves`, `direction`, **and `traversal`**, keeping `root`, `quality`,
+  `inversion`, `pattern`. Arpeggios have a single layout in v1 — the seed shape —
+  so `traversal` (whose values would all route through `shape_places` to identical
+  output) is removed entirely rather than kept as a no-op axis (spec §6, §8); the
+  removed `across_strings`/`single_string`/`positional` values are deferred
+  (spec §13). All placement goes through `arpeggio_shapes.shape_places`; `_across`,
+  `_places`, `_fret`/`_demanded` are deleted.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -563,7 +574,7 @@ BASS6 = PROFILES["bass6"]
 
 def test_arpeggio_journey_uses_all_needed_strings_and_is_up_and_down():
     params = {"root": BASS6.tuning[0] + 10, "quality": "min7", "inversion": "root",
-              "traversal": "across_strings", "pattern": "straight"}
+              "pattern": "straight"}   # no traversal axis: one layout in v1
     score, _hints = arpeggios.generate(BASS6, params)
     strings = [n.string for n in score.voice]
     assert strings[0] == 0 and max(strings) == len(BASS6.tuning) - 1   # not one-string collapse
@@ -576,12 +587,13 @@ def test_arpeggio_journey_uses_all_needed_strings_and_is_up_and_down():
   Expected: FAIL — old `_across` collapses onto a single string / reads removed axes.
 
 - [ ] **Step 3: Implement**
-  In `generate`: drop the three axis reads; build ascending tones long enough to
-  reach the top string, place via `arpeggio_shapes.shape_places` from the root's
-  low-string placement, apply `windowed`, order with `journey.updown`. Remove
-  `_across`, `_fret`/`_demanded` single-string paths superseded by `shape_places`.
-  `AXES = ("root", "quality", "inversion", "traversal", "pattern")`; drop the
-  direction word from the title.
+  In `generate`: drop the `direction`, `string_set`, `range_octaves`, **and
+  `traversal`** reads; build ascending tones long enough to reach the top string,
+  place via `arpeggio_shapes.shape_places` from the root's low-string placement,
+  apply `windowed`, order with `journey.updown`. Remove `_across`, `_places`,
+  `_fret`/`_demanded`, `_TRAVERSALS` — all superseded by `shape_places`.
+  `AXES = ("root", "quality", "inversion", "pattern")`; drop the direction word
+  from the title.
 
 - [ ] **Step 4: Run and confirm pass**, plus the full suite (update tests pinning
   removed axes). `vrg-container-run -- uv run pytest tests/ -q`
@@ -750,7 +762,9 @@ that nothing reads them, and migrate the shipping config so it still loads.
 
 **Files:**
 - Modify: `src/melete/config.py` (drop `_DIRECTION`, `_STRING_SET`, `_OCTAVES` from
-  `_AXES_BY_FAMILY`; remove the now-unused `_string_set` validator)
+  every `_AXES_BY_FAMILY` entry that lists them, and drop `_TRAVERSAL` from the
+  `arpeggios` entry only — scales keep it; remove the now-unused `_string_set`
+  validator)
 - Modify: `src/melete/vocabulary.py` (remove the `"direction"` axis entry — it is no
   longer sampled or displayed; titles no longer state direction)
 - Modify: `src/melete/families/_shared.py` (remove `boxed`, `string_set`,
@@ -782,6 +796,11 @@ def test_string_set_key_is_now_unknown(tmp_path):
         load(_write_config(tmp_path, "scales", extra="string_sets = [[0, 1, 2]]"))
 
 
+def test_arpeggio_traversal_key_is_now_unknown(tmp_path):
+    with pytest.raises(Exception, match="traversal"):
+        load(_write_config(tmp_path, "arpeggios", extra='traversals = ["positional"]'))
+
+
 def test_shipping_config_loads(tmp_path):
     load("build/config.toml")   # the migrated file loads cleanly
 ```
@@ -791,11 +810,14 @@ def test_shipping_config_loads(tmp_path):
 - [ ] **Step 2: Run and confirm failure**
   Run: `vrg-container-run -- uv run pytest tests/test_config.py -k "unknown or shipping" -v`
 
-- [ ] **Step 3: Implement** — remove the three `_Axis` entries from each
-  `_AXES_BY_FAMILY` tuple, delete `_DIRECTION`/`_STRING_SET`/`_OCTAVES` axis
-  constants and the `_string_set` helper, remove the `"direction"` entry from
-  `vocabulary.AXES`, delete `_shared.boxed`/`string_set`/`octaves`/`RANGE_OCTAVES`,
-  and edit `build/config.toml` to drop the removed keys from every pool.
+- [ ] **Step 3: Implement** — remove `_DIRECTION`, `_STRING_SET`, `_OCTAVES` from
+  every `_AXES_BY_FAMILY` tuple that lists them and remove `_TRAVERSAL` from the
+  `arpeggios` tuple only (scales keep it); delete the `_DIRECTION`/`_STRING_SET`/
+  `_OCTAVES` axis constants and the `_string_set` helper (keep `_TRAVERSAL`, still
+  used by scales); remove the `"direction"` entry from `vocabulary.AXES`; delete
+  `_shared.boxed`/`string_set`/`octaves`/`RANGE_OCTAVES`; and edit
+  `build/config.toml` to drop `directions`, `string_sets`, `octaves` from every
+  pool and `traversals` from `[pool.arpeggios]` only.
 
 - [ ] **Step 4: Run and confirm pass**, plus `vrg-container-run -- vrg-validate`
   (the full suite, with the migrated config).

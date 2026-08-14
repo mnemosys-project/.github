@@ -250,7 +250,10 @@ or the string above, and different qualities have different idiomatic shapes —
 v1 does **not** infer it. It encodes **one canonical seed shape per quality**
 (`maj7, min7, dom7, m7b5, min6`) as reviewable data, and **derives** inversions and
 higher positions from the seed by transposition rather than enumerating every
-`(quality, inversion, position)` by hand. The seed set is therefore small (≈5
+`(quality, inversion, position)` by hand. Because there is one shape per quality,
+arpeggios have a **single layout in v1 and no fingering-style axis** — the
+`traversal` axis is removed for this family (§8), unlike scales, which keep two
+real styles. The seed set is therefore small (≈5
 shapes) and the bulk is computed. Authoring those seed shapes is an explicit,
 **instructor-gated task scheduled up front** (§11) — the arpeggio family is blocked
 on it, so it is named and scheduled, not discovered mid-implementation. This
@@ -307,6 +310,14 @@ The split is **content stays sampled, geometry becomes computed**:
   `[1, 2, 3]` draw; octave count is not sampled and not a target. It is emergent
   from the outer-to-outer journey (§5) — whatever reaching the opposite outer string
   yields on the instrument at hand.
+- **Arpeggio `traversal` removed.** With arpeggio fingering defined by a single
+  canonical seed shape per quality (§6), a `traversal` axis for arpeggios would
+  select between identical layouts — the "two values of one axis naming one
+  exercise" that §9's coverage accounting cannot tell apart and the codebase
+  forbids elsewhere. It is removed from the `arpeggios` pool and axis list.
+  **Scales keep `traversal`** — positional and three-note-per-string are genuinely
+  different fingering styles. The future b3-on-the-root's-string vs
+  b3-on-the-string-above split (§13) is where arpeggios regain two real styles.
 - **Config migration.** Removing these axes turns their keys unknown to
   `_reject_unknown` (`config.py:173`), so the shipping `build/config.toml` (and any
   working config) must be migrated in the same change — dropping the `directions`,
@@ -410,7 +421,12 @@ Named so the boundary is explicit and the design leaves room for each.
   this substrate: the N = 2 boxing path, the register-split coverage strategy, the
   `Hand`/`Attack` model, and the articulation renderer work.
 - **Next version.** Single-string and two-string scale/arpeggio modes — an advanced
-  case the author does not need yet.
+  case the author does not need yet. The traversals dropped as unbuilt in v1 return
+  with the modes that give them meaning: scales' `octave_per_string` and
+  `single_string`, and arpeggios' `across_strings` and `single_string`.
+- **Next version.** A real arpeggio fingering-style axis — the b3 on the root's
+  string vs the string above — reinstating `traversal` for arpeggios once there is
+  more than one seed shape per quality to choose between (§6, §8).
 - **Next version.** Horizontal / diagonal continuations — staying in a vertical
   neck slice and shifting the root, and diagonal three-note-per-string climbs.
 - **Next version.** Upper-neck root anchoring — roots in the upper half of the
