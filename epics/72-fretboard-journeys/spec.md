@@ -1,0 +1,402 @@
+# Coherent fretboard journeys and the layout substrate
+
+**Design specification, v1.0**
+**Date:** 2026-08-14
+**Org:** `mnemosys-project`
+**Repository:** `mnemosys-project/melete`
+**Epic:** [`mnemosys-project/.github#72`](https://github.com/mnemosys-project/.github/issues/72)
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. Scope](#2-scope)
+- [3. Architecture](#3-architecture)
+- [4. The layout strategy](#4-the-layout-strategy)
+- [5. The one-hand journey](#5-the-one-hand-journey)
+- [6. Fingering styles and per-family coherence](#6-fingering-styles-and-per-family-coherence)
+- [7. Grouping and pattern semantics](#7-grouping-and-pattern-semantics)
+- [8. Selection and configuration](#8-selection-and-configuration)
+- [9. The two-hand seam (built now, unused now)](#9-the-two-hand-seam-built-now-unused-now)
+- [10. Error handling](#10-error-handling)
+- [11. Testing strategy and acceptance](#11-testing-strategy-and-acceptance)
+- [12. Recorded decisions](#12-recorded-decisions)
+- [13. Deferred](#13-deferred)
+
+## 1. Overview
+
+melete generates bass practice exercises by sampling abstract axes, realizing
+each draw through a family into a concrete `(string, fret)` voice, and metering
+the result into whole bars. The generative model works; the **geometry** does
+not. Direction, root anchor, string coverage, octave span, and grouping are each
+sampled as *independent* draws (`selection.py`) and merely resampled until the
+result passes a note-count and hand-span budget (`selection._rejected`,
+`selection.py:443-482`). Nothing computes a coherent journey, so individually
+"valid" draws compose into musically incoherent exercises.
+
+This epic replaces sampled geometry with **computed journeys**. Every exercise
+becomes a single up-and-down round trip, anchored at its root on the lowest
+string, covering the neck under an explicit **layout strategy**, with grouping
+patterns unwound correctly across the full span. In the same stroke it extracts
+the **placement substrate** — a hand-reach-aware boxing primitive generalized to
+one *or two* anchors — that two-handed tapping
+([`#67`](https://github.com/mnemosys-project/.github/issues/67)) will be rebased
+onto.
+
+**Success criterion.** With the default configuration, `melete generate` produces
+a practice sheet whose every scale, arpeggio, chromatic, and interval exercise is
+a coherent journey: it starts on an outer string (the root's string for
+scales/arpeggios) in the lower neck, travels under a named fingering style to the
+turnaround, and returns as the exact retrograde — playable, complete, and
+faithful to its title. Held against a sheet, the player and instructor can say
+yes or no, and the regenerated five acceptance exercises replace the current
+goldens.
+
+**The four defects this closes** (from the 2026-08-13 goldens, epic #57):
+
+| # | Exercise | Defect | Root cause |
+|---|---|---|---|
+| 1 | Chromatic 3-1-4-2, descending | ~3 of 6 strings; starts mid-neck; repeats a string; one direction | string set and start string sampled independently; `direction` sampled |
+| 2 | Bb blues, ascending | root on fret 1 of the A string, not Bb on the low B string | `_shared.boxed` minimizes travel from an arbitrary base; anchor not pinned |
+| 3 | C major pentatonic, groups of 4 | grouping turns around before completing an octave | underlying span too short; `windowed` runs out of notes |
+| 4 | Em7, across strings | odd open strings; collapses to one string; never reaches the top | `_across` holds a string when the next can't reach; no coherent coverage |
+
+## 2. Scope
+
+### In scope
+
+- A first-class **layout strategy** (§4): given a pitch sequence, an anchor, and a
+  string set, it computes each note's `(string, fret)` **and** the exercise's
+  coverage. It is built over a **generalized boxing primitive** that boxes a pitch
+  run under *N* hand-anchors, N in {1, 2}; this epic implements **N = 1**.
+- **Coherent one-hand journeys** (§5) for all four families: anchor the root on
+  the lowest string in the lower neck (frets 0-12, semi-randomized, open strings
+  allowed), ascend across the strings to the turnaround, descend as the exact
+  retrograde. Direction is always up-and-down.
+- **Fingering styles** (§6): scales carry **positional/boxed** and
+  **three-note-per-string**; arpeggios carry the standard plucking shapes encoded
+  as reviewable data. Chromatic keeps its fixed four-finger mechanic, made
+  coherent. Intervals get the same geometry treatment.
+- **Grouping patterns** (§7) unwound as an **overlapping window sliding by one**
+  across the full ascending span, reversed for the descent.
+- Geometry moves from sampled to computed (§8): the `direction` and `string_set`
+  axes are **removed**, octaves are **computed** to fill the journey, and the root
+  anchor is **pinned** to the lowest string.
+- **Raise-not-clamp** preserved (§10): an unplayable placement raises and the
+  validity gate resamples.
+- Acceptance (§11) by **regenerating the five exercises and re-freezing the
+  goldens** (#137 harness) with human + instructor sign-off.
+
+### Out of scope (deferred, named — §13)
+
+- Two-handed tapping *implementation* — #67, rebased on this substrate.
+- Single-string and two-string scale/arpeggio modes.
+- Horizontal / diagonal continuations.
+- Upper-neck root anchoring.
+- The eventual hand-written bespoke exercise library.
+
+### Renderer boundary
+
+Every change is renderer-agnostic and stays behind the `score.py` seam
+(`CLAUDE.md`, *The renderer boundary*). The touched modules — `families/_shared`,
+`families/*`, `selection`, `config`, `pipeline`, and the `layout` fitter's
+interface — never import the alphaTab emitter, and this epic adds no note field,
+so `alphatab/emit.py` and the golden alphaTex are untouched except by the
+regenerated acceptance goldens (§11).
+
+### Audience
+
+melete is a tool for its author, an advanced player whose instructor sets the
+material. That permits assumptions a tool for strangers could not: the fingering
+vocabulary is drawn from this player's practice, and the exercises assume a player
+who reads standard bass fingerings.
+
+## 3. Architecture
+
+`pipeline.realize` (`pipeline.py:48-76`) is the one place the renderer-agnostic
+stages are wired: `family.generate -> layout.plan_voice (fitter) ->
+rhythm.restamp -> replace -> Score`. This epic changes **what the family
+computes**, not the pipeline's shape. The fitter still meters the note count; the
+restamp still stamps rhythm; the redesign lives inside `family.generate` and its
+shared helpers.
+
+Today a family resolves placement, direction, coverage, octaves, pattern, and
+root **all at once** inside `generate` from independently sampled axes, then the
+selector resamples if the result fails the budget. The redesign keeps `generate`
+as the placement owner but routes its geometry through a **layout strategy** built
+on a shared boxing primitive.
+
+```text
+family.generate(profile, params):
+  pitches   = theory.<...>(root, type, octaves)      # WHAT (unchanged)
+  strategy  = choose_strategy(family, params)         # HOW  (new: fingering style)
+  journey   = strategy.lay_out(pitches, anchor, ...)  # coherent (string,fret), up-and-down
+  return Score(journey), LayoutHints(...)
+```
+
+**The load-bearing boundaries.**
+
+- **The placement primitive is the one hand-aware layout function.** The
+  generalization from one hand to two (§9) lives in exactly one primitive in
+  `_shared`; nothing else counts hands or reasons about `position_span`. This is
+  the seam #67's two-hand strategy plugs into.
+- **Coverage is owned by the strategy, not sampled.** A strategy decides which
+  strings the journey uses. "Full-neck vertical" is the one-hand default; "narrow
+  register-split" is tapping's, reserved. There is no independent `string_set`
+  axis to contradict a strategy's coverage.
+- **Musical content stays sampled; geometry is computed.** Root pitch-class, scale
+  type, quality, inversion, pattern, tempo, and *which fingering style* remain
+  sampled draws (the diversity engine). Direction, string coverage, octave span,
+  and the concrete anchor are computed.
+
+## 4. The layout strategy
+
+A **layout strategy** answers "how do these pitches sit on the neck?" It is the
+home the code has lacked: today the answer is smeared across `scales._places`
+(`scales.py:239-261`), `arpeggios._places` (`arpeggios.py:264-288`),
+`_shared.boxed` (`_shared.py:223-276`), and `chromatic._strings`
+(`chromatic.py:132-156`), each rolling its own placement with no shared concept.
+
+A strategy is defined by:
+
+- **its placement rule** — how a pitch run maps to `(string, fret)` under
+  hand-reach constraints (boxed vs three-note-per-string vs the arpeggio shapes);
+- **its coverage** — which strings the journey traverses, computed from the anchor
+  and the string count, not sampled;
+- **its anchor count** — one hand (this epic) or two (the seam, §9).
+
+The strategies are built over **one generalized boxing primitive** in `_shared`,
+which replaces the frozen `boxed`:
+
+```text
+box(profile, pitch_run, strings, anchors) -> [(string, fret, anchor_index)]
+    # anchors is a tuple of 1 or 2 base frets; each pitch takes the reachable
+    # position nearest its owning anchor; each anchor's fretted span must satisfy
+    # profile.position_span; raises if no assignment fits.
+```
+
+For N = 1 this reproduces today's positional placement but with the **anchor
+pinned** rather than chosen to minimize travel from an arbitrary base — which is
+the fix for defect 2 (the Bb landing on the A string). `instrument.positions`
+(`instrument.py:185-196`), `instrument.hand_span` (`instrument.py:165-182`), and
+`profile.position_span` remain the reach primitives; `_reachable`
+(`_shared.py:204-220`) remains the per-pitch candidate enumerator.
+
+**Migration note.** The existing single-hand `_shared.boxed` is superseded by the
+N = 1 path of `box`; its behavior (nearest reachable position within one
+`position_span`, issue #57's span rejection) is preserved as the N = 1 case and
+its tests carried forward. #67's earlier plan to freeze `boxed` byte-for-byte and
+add a sibling `two_hand_boxed` is superseded by this unification (§9, §12).
+
+## 5. The one-hand journey
+
+Every exercise is a single computed round trip, replacing the sampled `direction`
+and the independent string/octave draws:
+
+1. **Anchor.** The root is placed on the **lowest string of the string set**, in
+   the lower neck (frets 0-12), semi-randomized so the session spreads across the
+   low region rather than repeating one position. Open strings (fret 0) are valid
+   positions and are computed, not special-cased away (decision 5). For chromatic
+   and intervals, which have no single "root," the anchor is the outer string of
+   the traversal and its starting fret.
+2. **Ascend.** From the anchor the journey travels **outward across the strings**
+   under the chosen fingering style, covering the neck to the **turnaround** — the
+   top string, or the computed octave target for that string set (§6). This is
+   where coverage is realized: the ascent uses every string the strategy's
+   coverage names, in order, with no gaps and no repeats (the fix for defects 1
+   and 4).
+3. **Turnaround.** The apex note plays once.
+4. **Descend.** The descent is the **exact retrograde** of the patterned ascent —
+   not a separately computed figure. This reuses the existing retrograde
+   discipline (`_shared.directed_by_cell`, `_shared.py:309-341`), now the only
+   direction the families produce.
+
+Because direction is no longer sampled, `directed_by_cell`'s `up`/`down` branches
+become dead for the families and the cell-aware `up_down` turnaround becomes the
+single path. The seam for a future single-direction escape hatch (decision 1) is
+preserved by keeping direction a strategy parameter with a fixed value, not by
+retaining a sampled axis.
+
+## 6. Fingering styles and per-family coherence
+
+### Scales
+
+The fingering style **is** the placement rule. v1 implements the two styles today
+mis-modelled as `traversal` values:
+
+- **positional / boxed** — the pitches sit under one hand position; the box climbs
+  the neck by string, staying within `position_span`.
+- **three-note-per-string** — three scale degrees per string, climbing outward.
+
+The style is a sampled *content* choice (which mapping to drill); the geometry it
+produces is computed. The `positional` single-octave fallback that exists today
+(`scales.py:311-323`) is subsumed by the octave computation (§8): the journey
+targets the octaves the string set and style actually support, so an unreachable
+two-octave box is never proposed and then compromised — it is simply not the
+computed target.
+
+### Arpeggios
+
+Arpeggio fingering is genuinely ambiguous — the third can sit on the root's string
+or the string above, and different qualities have different idiomatic shapes — so
+v1 encodes the **standard plucking shapes as reviewable data tables**, one per
+`(quality, style)`, validated with the instructor rather than inferred. This
+replaces `_across` (`arpeggios.py:241-261`), whose "hold a string when the next
+can't reach" rule produces defect 4. The tables are the specification of "correct
+fingering"; the validation task (§11) is where they are confirmed against a sheet.
+
+### Chromatic
+
+Chromatic's mechanic is fixed and unambiguous — four fingers on four adjacent
+frets — so it gains no fingering style. Its journey is made coherent: **start on
+an outer string of the string set, traverse the full set to the other outer
+string, turn around, return**, with the per-cycle fret shift (`_FRET_STEP`,
+`chromatic.py:116`) preserved. This removes the mid-neck starts, the partial
+string coverage, and the repeated string of defect 1. `_strings`
+(`chromatic.py:132-156`) is rewritten to traverse the whole set outward-and-back
+rather than walking a sampled direction from a sampled start string.
+
+### Intervals
+
+The intervals family gets the same geometry treatment: up-and-down, anchored on an
+outer string, covering the configured string set, with the interval pattern
+unwound across the full span (§7).
+
+## 7. Grouping and pattern semantics
+
+Grouping patterns unwind as an **overlapping window sliding by one** across the
+**full** ascending span, then reverse for the descent. For C major, groups of 4:
+`C D E F / D E F G / E F G A / ...` — each group starts one degree higher and
+shares three notes with the last. `thirds` is the window `(degree, degree+2)`
+sliding by one (C-E, D-F, E-G, ...); `groups_of_3` is `(0,1,2)`; and so on.
+
+This is the semantics `_shared.windowed` (`_shared.py:190-201`) already intends
+(`range(count - max(window))`). Defect 3 is not a window bug: the window ran out
+of notes because the underlying ascent spanned a fraction of the intended range.
+The journey redesign (§5) supplies the full two-octave (or string-set-complete)
+ascent the sliding window needs, so the pattern reaches across the neck as
+written. The window length remains the fitter's `cell` (one beat), unchanged
+(`scales.py:361`, `arpeggios.py:377`).
+
+## 8. Selection and configuration
+
+The split is **content stays sampled, geometry becomes computed**:
+
+- **Removed axes.** `direction` (`vocabulary.py:152-156`) and `string_set` (the
+  sampled per-family string sets, e.g. `config.toml [pool.scales] string_sets`)
+  are **removed** from configuration and the vocabulary registry. Direction is
+  always up-and-down; string coverage is computed by the strategy. Removing them
+  outright (rather than leaving them inert) keeps the config honest about what is
+  actually variable; the up-and-down seam for a future escape hatch lives in code
+  (§5), not in a dormant axis.
+- **Computed octaves.** `range_octaves` (`_shared.py:72`) stops being a free
+  `[1, 2, 3]` draw; the journey computes the octave target that fills the string
+  set under the chosen style (two octaves on a six-string in the vertical case,
+  fewer on smaller instruments). Whether octaves are gone entirely or retained as
+  a capped preference is a plan-level detail; the spec's requirement is that the
+  *target is computed to complete the journey*, never sampled to a value the
+  coverage cannot honor.
+- **Pinned anchor.** `root` stays a sampled pitch class, but its realization
+  (`selection._realized`, `selection.py:421-435`) pins it to the lowest string in
+  the lower neck (§5) instead of the lowest octave at or above the string set's
+  open pitch.
+- **Retained content axes.** Root pitch-class, scale type, quality, inversion,
+  `pattern`, tempo, and the new **fingering style** remain sampled and
+  recency-weighted for diversity. The style joins the per-family axis list
+  alongside the existing content axes.
+
+The validity gate (`selection._rejected`, `selection.py:443-482`) and its
+`max_notes`/`max_fret_span` budgets are unchanged: computed journeys still pass
+through it, and an unplayable one still resamples (§10).
+
+## 9. The two-hand seam (built now, unused now)
+
+This epic builds the substrate #67 needs, implementing only the one-hand half:
+
+- **Generalized boxing.** `box` (§4) takes 1 *or* 2 anchors from day one. The N = 1
+  path is this epic; the N = 2 path — two hands, each within its own
+  `position_span`, partitioned by per-string fret region (low frets to the lower
+  hand, high to the upper) — is the primitive #67's two-hand strategy calls. It is
+  designed and specified here but not exercised.
+- **Coverage as a strategy property.** Because coverage is owned by the strategy
+  (§3), tapping's narrow, register-split coverage is a *different strategy*, not a
+  sampled `string_set` fighting the one-hand full-neck default. This removes the
+  collision between #67's narrow sets and this epic's computed coverage at the
+  source.
+- **Left to #67.** The `Hand`/`Attack` fields on `Note`, the `tapping.reach`
+  modifier, its `pipeline.realize` slot, and the emitter/renderer work remain
+  #67's. This epic adds no note field and touches no emitter. The placement seam
+  is shaped so those land additively.
+
+**#67 is superseded by design.** Its current spec/plan assume a frozen `boxed`, a
+sampled narrow `string_set`, and an inherited `direction` axis — all changed here.
+Once this epic lands, #67 is re-brainstormed and rebased on this substrate as its
+own epic-create run (§13).
+
+## 10. Error handling
+
+| Failure | Behavior |
+|---|---|
+| A computed journey cannot be placed under one hand within `position_span` | `box` raises, naming the pitches, string set, and profile; `selection._rejected` resamples. Never clamped to fit. |
+| A fingering style is asked for a shape it has no data for (e.g. an arpeggio quality/style with no table) | Raise at generation, naming the family, quality, and style — a missing shape is a specification gap, not a silent default. |
+| A string set too small for the chosen octave target | The octave target is computed from the string set (§8), so this cannot arise from sampling; if a configured string set genuinely cannot host the style, generation raises rather than truncating. |
+| An open-string position is required | Allowed — fret 0 is a valid computed position, not an error (decision 5). |
+
+No swallowed exceptions and no layout clamped to fit: a mislabelled exercise is
+worse than a resampled one, because the label is the part the student trusts
+(project policy, `~/.claude/CLAUDE.md`, *No silent failures*).
+
+## 11. Testing strategy and acceptance
+
+| Component | Approach |
+|---|---|
+| `box` N = 1 | Property: every returned position sounds its pitch (`tuning[string] + fret == pitch`); the hand span is within `position_span`; the anchor is pinned to the intended string/region. Regression: the superseded `boxed` inputs produce equivalent placements. |
+| One-hand journey | Golden per family: the ascent covers the strategy's strings in order with no gaps or repeats; the descent is the exact retrograde; the apex plays once. |
+| Coverage | The journey's distinct strings equal the strategy's computed coverage (full-neck vertical uses the outer strings and every string between). |
+| Grouping | The overlapping sliding window spans the full ascent (defect 3): a two-octave scale in groups of 4 yields the expected overlapping groups end to end. |
+| Anchor | A scale rooted at a given pitch class anchors on the lowest string in the lower neck (defect 2): Bb anchors on the low B string at fret 11, not the A string at fret 1. |
+| Chromatic coherence | Starts on an outer string, traverses the full set to the other outer string, returns; no repeated string (defect 1). |
+| Removed axes | Config with a `direction` or `string_set` key is rejected by `_reject_unknown`; no draw carries them. |
+
+**Acceptance is by regeneration, not only unit tests.** The five acceptance
+exercises are regenerated under the new model and the goldens re-frozen (#137
+harness), gated by the **validation task** (`melete#152`): the instructor confirms
+each exercise is actually playable and correct — up-and-down, anchored low, fully
+covering, correctly grouped, with a playable fingering — before the goldens are
+accepted. This is the property no unit test can assert and the epic's true
+success criterion (§1).
+
+## 12. Recorded decisions
+
+| # | Decision | Rationale |
+|---|---|---|
+| 1 | Direction is always up-and-down; the single-direction escape hatch is a code seam, not a retained axis. | Almost every exercise is worth playing both ways; single-direction is a rare future exception. A dormant sampled axis would invite the incoherence this epic removes. |
+| 2 | Geometry (direction, coverage, octaves, anchor) is computed; musical content (root, type, quality, inversion, pattern, tempo, fingering style) stays sampled. | The incoherence came from sampling geometry independently and resampling to fit. Computing geometry makes the four defects impossible by construction while preserving the diversity the content axes provide. |
+| 3 | Placement is owned by a first-class **layout strategy** over **one generalized boxing primitive** (N in {1,2}), not the frozen `boxed` + bolted `two_hand_boxed` of #67. | Both epics answer "how do pitches sit on the neck." One primitive, parameterized by anchor count, is the honest shared substrate; a frozen primitive plus a sibling duplicates reach math and splits the concept. |
+| 4 | Coverage is a property of the strategy, not a sampled `string_set` axis. | A strategy that computes full-neck coverage cannot also honor an independent narrow `string_set` draw. Making coverage strategy-owned removes the collision with #67's narrow tap sets at the source and matches the author's "extent is a property of the exercise." |
+| 5 | Open strings are allowed and computed, not special-cased away. | Picking positions correctly makes fret 0 a legitimate choice; premature avoidance is optimization without evidence. Revisited only if the regenerated exercises show it is a problem. |
+| 6 | Arpeggio fingering is encoded as reviewable data tables, not inferred. | Arpeggio shapes are genuinely ambiguous and idiomatic; a data table the instructor validates is more honest than an algorithm guessing "traditional fingering," and it is the seam future styles (including tapping) extend. |
+| 7 | Grouping is an overlapping window sliding by one across the full span. | Non-overlapping blocks reduce to the plain scale with barlines; the shared-note overlap is the exercise. Defect 3 was a short span, not a wrong window. |
+| 8 | Chromatic gains no fingering style but is made coherent (outer-string start, full traversal, up-and-down). | Its mechanic — four fingers, four frets — is unambiguous; only its journey was incoherent. |
+| 9 | The `Hand`/`Attack` model, the tapping modifier, and the emitter work stay #67's; this epic builds only the placement seam. | Keeps the renderer boundary clean and the epic sized to v1 while making #67 additive rather than colliding. |
+| 10 | #67 is superseded and will be re-brainstormed on this substrate. | It was planned before this feedback; its frozen-`boxed`/sampled-`string_set`/`direction`-axis assumptions are all changed here. Rebasing it is a known enabling chain (§13). |
+
+## 13. Deferred
+
+Named so the boundary is explicit and the design leaves room for each.
+
+- **Next (its own epic).** Two-handed tapping (#67), re-brainstormed and rebased on
+  this substrate: the N = 2 boxing path, the register-split coverage strategy, the
+  `Hand`/`Attack` model, and the articulation renderer work.
+- **Next version.** Single-string and two-string scale/arpeggio modes — an advanced
+  case the author does not need yet.
+- **Next version.** Horizontal / diagonal continuations — staying in a vertical
+  neck slice and shifting the root, and diagonal three-note-per-string climbs.
+- **Next version.** Upper-neck root anchoring — roots in the upper half of the
+  neck; low anchoring covers the common, practical case for v1.
+- **Later.** A hand-written **bespoke exercise library** for shapes too complex to
+  derive from general rules, pulled from a curated source rather than generated.
+
+---
+
+**Status:** Draft. Filed as epic
+[#72](https://github.com/mnemosys-project/.github/issues/72).
