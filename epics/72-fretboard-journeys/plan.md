@@ -110,10 +110,12 @@ than free-searching for the lowest-travel base (`boxed`'s search is what let the
 Bb land on the A string, defect 2). N = 1 is implemented; N ≥ 2 is the #67 seam.
 
 **Files:**
+
 - Modify: `src/melete/families/_shared.py`
 - Test: `tests/families/test_shared_box.py`
 
 **Interfaces:**
+
 - Consumes: `_shared._reachable`, `melete.instrument.hand_span`,
   `melete.instrument.positions`.
 - Produces:
@@ -226,10 +228,12 @@ fingering style, place notes from the low anchor to the opposite outer string,
 then return the up-and-down order. Extent and octave count are emergent.
 
 **Files:**
+
 - Create: `src/melete/families/journey.py`
 - Test: `tests/families/test_journey.py`
 
 **Interfaces:**
+
 - Consumes: `_shared.box`, `_shared.directed_by_cell`,
   `melete.instrument.InstrumentProfile`, `melete.instrument.positions`.
 - Produces:
@@ -369,10 +373,12 @@ the full ascent. It stops reading `direction`, `string_set`, and `range_octaves`
 reads them — extra keys are carried, per the existing contract).
 
 **Files:**
+
 - Modify: `src/melete/families/scales.py`
 - Test: `tests/families/test_scales.py`
 
 **Interfaces:**
+
 - Consumes: `journey.boxed_span`, `journey.per_string`, `journey.updown`,
   `_shared.windowed`, `theory.scale_pitches`.
 - Produces: `scales.generate(profile, params)` unchanged in signature; the voice is
@@ -474,10 +480,12 @@ One canonical seed shape per chord quality, plus derivation of inversions and
 higher octave positions, replacing `_across`'s "hold a string" rule (defect 4).
 
 **Files:**
+
 - Create: `src/melete/families/arpeggio_shapes.py`
 - Test: `tests/families/test_arpeggio_shapes.py`
 
 **Interfaces:**
+
 - Consumes: `theory.chord_pitches`, `melete.instrument.InstrumentProfile`.
 - Produces:
   - `SEED_SHAPES: dict[str, tuple[tuple[int, int], ...]]` — per quality, the
@@ -546,10 +554,12 @@ def test_off_neck_tone_raises():
 **Blocked-by:** B1, C1
 
 **Files:**
+
 - Modify: `src/melete/families/arpeggios.py`
 - Test: `tests/families/test_arpeggios.py`
 
 **Interfaces:**
+
 - Consumes: `arpeggio_shapes.shape_places`, `journey.updown`, `_shared.windowed`,
   `theory.chord_pitches`.
 - Produces: `arpeggios.generate` unchanged in signature; the voice is the
@@ -616,10 +626,12 @@ mid-neck start, no repeated string, always up-and-down (fixes defect 1). The
 four-finger mechanic and the per-cycle `shift` are preserved.
 
 **Files:**
+
 - Modify: `src/melete/families/chromatic.py`
 - Test: `tests/families/test_chromatic.py`
 
 **Interfaces:**
+
 - Consumes: `_shared.there_and_back`.
 - Produces: `chromatic._strings` traverses `start_string .. start_string ± (span-1)`
   outward and back (always up-and-down), no `direction` argument. `generate` drops
@@ -671,10 +683,12 @@ up-and-down, the interval pattern unwound across the full span. Drop `direction`
 and `string_set`.
 
 **Files:**
+
 - Modify: `src/melete/families/intervals.py`
 - Test: `tests/families/test_intervals.py`
 
 **Interfaces:**
+
 - Consumes: `journey.per_string` / `journey.boxed_span` (whichever the interval
   traversal maps to), `journey.updown`, `_shared.windowed`.
 - Produces: `intervals.generate` unchanged in signature; the voice is the
@@ -712,10 +726,12 @@ set's lowest string. Pin it to the lowest *instrument* string (index 0), in the
 lower neck (frets 0–11), which is the anchor the journeys assume (spec §5, §8).
 
 **Files:**
+
 - Modify: `src/melete/selection.py`
 - Test: `tests/test_selection.py`
 
 **Interfaces:**
+
 - Produces: `_realized` maps `root` (a pitch class) to `profile.tuning[0] +
   (pitch_class - profile.tuning[0]) % 12` — the lowest fret on the lowest string
   sounding it — independent of any string-set param.
@@ -761,6 +777,7 @@ Remove `direction`, `string_set`, and `range_octaves` from the sampled surface n
 that nothing reads them, and migrate the shipping config so it still loads.
 
 **Files:**
+
 - Modify: `src/melete/config.py` (drop `_DIRECTION`, `_STRING_SET`, `_OCTAVES` from
   every `_AXES_BY_FAMILY` entry that lists them, and drop `_TRAVERSAL` from the
   `arpeggios` entry only — scales keep it; remove the now-unused `_string_set`
@@ -774,6 +791,7 @@ that nothing reads them, and migrate the shipping config so it still loads.
 - Test: `tests/test_config.py`, `tests/test_vocabulary.py`
 
 **Interfaces:**
+
 - Produces: a config carrying `directions`, `string_sets`, or `octaves` under any
   pool fails `_reject_unknown` (spec §11); `build/config.toml` loads and
   `melete generate` runs against it.
