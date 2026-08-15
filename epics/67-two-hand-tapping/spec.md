@@ -1,12 +1,17 @@
-# Two-handed tapping — a tabulated tap-shape vocabulary for melete
+# Two-handed tapping — a two-hand box vocabulary for melete
 
-**Design specification, v2.0 (rebased onto the coherent-journey layout model)**
+**Design specification, v2.1 (universal two-hand box)**
 **Date:** 2026-08-15
 **Org:** `mnemosys-project`
 **Repository:** `mnemosys-project/melete`
 **Epic:** [`mnemosys-project/.github#67`](https://github.com/mnemosys-project/.github/issues/67)
-**Supersedes:** v1.0 (2026-08-13), which predated epic #72 (the coherent
-up-and-down journey). See [§13 What changed in the rebase](#13-what-changed-in-the-rebase).
+**Supersedes:** v2.0 (rebased onto epic #72), which in turn superseded v1.0. See
+[§13 What changed](#13-what-changed) for the v1.0→v2.0 rebase and the v2.0→v2.1
+box refinement.
+**v2.1 change:** the B0 capture (`melete#188`) showed the triad choreography is
+**one universal, mostly-derivable box** tiled up the arpeggio — not a table of
+per-`(quality, inversion)` shapes. §5, §6, and the affected decisions are revised
+accordingly.
 
 ## Table of Contents
 
@@ -22,15 +27,15 @@ up-and-down journey). See [§13 What changed in the rebase](#13-what-changed-in-
 - [10. Testing Strategy](#10-testing-strategy)
 - [11. Recorded Decisions](#11-recorded-decisions)
 - [12. Deferred](#12-deferred)
-- [13. What changed in the rebase](#13-what-changed-in-the-rebase)
+- [13. What changed](#13-what-changed)
 
 ## 1. Overview
 
 Two-handed tapping is the largest category of the author's course material that
-melete cannot generate. This epic adds it as a **tabulated tap-shape
-vocabulary** for the `arpeggios` family: a curated set of two-hand fingering
-choreographies, one per (chord quality × inversion), that the family walks up
-and down the neck the same way it already walks a one-hand arpeggio.
+melete cannot generate. This epic adds it as a **universal two-hand box** for the
+`arpeggios` family: one fixed two-hand fingering shape — captured from the
+instructor's own playing (B0) and shared across the four triads — that the family
+tiles up and down the neck the same way it already walks a one-hand arpeggio.
 
 The v1.0 spec modelled tapping as a derived, cross-cutting modifier that split
 notes to hands by a fixed geometric rule. Direct testimony from the player the
@@ -59,10 +64,11 @@ hands, and no further: a fretting-hand count above two is not a musical case and
 is explicitly out of scope (§11, decision 2).
 
 This is, as far as the author can determine, the first attempt to codify
-two-handed tapping choreography in software. The tabulated vocabulary is both the
-v1 deliverable and the raw material for a later, more ambitious contribution:
-once enough shapes are captured, the mathematical structure underneath them may
-support deriving the choreography algorithmically (§12).
+two-handed tapping choreography in software. The captured box is both the v1
+deliverable and the raw material for the later work: as more of the vocabulary is
+captured (alternate voicings, sevenths), the mathematical structure underneath —
+already visible in the triad box's derivable frets — may support deriving the
+choreography in full (§12).
 
 ## 2. Scope
 
@@ -72,18 +78,20 @@ support deriving the choreography algorithmically (§12).
   (`TAPPED | PLUCKED | SLURRED`), plus the generalization of `finger` from
   "left hand 1–4" to "finger 1–4 of `hand`". `PLUCKED` and `LEFT` are the
   defaults, so every existing family, golden file, and test is unchanged.
-- A **curated triad tap-shape vocabulary** — one two-hand choreography per
-  (quality × inversion) for the four triads `maj`, `min`, `dim`, `aug` — living
-  beside the existing one-hand `arpeggio_shapes.SEED_SHAPES`. **PROVISIONAL**
-  musical data, authored and confirmed by the instructor and gated on its own
-  validation task, exactly as the one-hand seed shapes are gated on `melete#152`.
+- The **universal two-hand box** (§5) — one fixed structure (root+third = left
+  ring+index, fifth+octave-root = right index+middle; frets derived from the chord
+  intervals) realizing all four triads `maj`/`min`/`dim`/`aug`, living beside the
+  one-hand `arpeggio_shapes`. **PROVISIONAL** musical data (captured in B0,
+  `melete#188`), confirmed by its own validation task exactly as the one-hand seed
+  shapes are gated on `melete#152`.
 - Realization of `box`'s reserved **two-anchor path** in `families/_shared.py`:
-  given a shape's hand partition, place each hand's tones within its own
+  given a caller-supplied hand partition, place each hand's tones within its own
   `position_span` on the string set, preserving pitch. Raises when a two-hand box
   cannot be laid out; §9's validity gate resamples.
-- A **tapped-journey driver** in the `arpeggios` family that walks a triad's
-  inversions up and back across the neck, realizing each inversion's tap shape
-  and deriving legato (hammer-on/pull-off) within each hand's same-string runs.
+- A **tapped-journey driver** in the `arpeggios` family that tiles the box up the
+  triad's chord tones, up and back across the neck, stamping `hand`/`finger`; the
+  triad default taps every note (no legato), and the derived-legato pass stays
+  wired for future slur styles.
 - A one-line change to `rhythm.restamp`'s accent pass so it never accents a
   `SLURRED` note (§9) — the only edit to the shared rhythm module.
 - Selection by **treating tapped triads as quality candidates** in the
@@ -139,9 +147,9 @@ it. It is realized in three layers.
   (§6) places a supplied partition across two hands; the legato derivation and
   articulation stamping are written so a future scales driver reuses them. This
   is the two-hand sibling of the one-hand `box`/`journey` machinery #72 built.
-- **Family-specific (`families/arpeggios.py`, a new tap-shape module).** The
-  curated triad tap-shape vocabulary (§5) and the tapped-journey driver that
-  walks a triad's inversions across the neck applying those shapes (§6).
+- **Family-specific (`families/arpeggios.py`, a new tap-box module).** The
+  universal two-hand box (§5) and the tapped-journey driver that tiles it up the
+  triad's chord tones, across the neck and back (§6).
 
 **Placement happens at family generation, not after a fitter.** This is the
 load-bearing reversal from v1.0. Because the choreography is *inversion-indexed*,
@@ -228,51 +236,51 @@ R&D survey found, where `Tapped`, `LeftHandTapped`, and
 
 ## 5. The tap-shape vocabulary
 
-This is the heart of the epic and the genuinely new artifact. A **tap shape** is
-the two-hand fingering choreography for one (quality, inversion): for each chord
-tone, which hand frets it, with which finger, and where it sits relative to an
-anchor. The shapes are the two-hand sibling of the one-hand
-`arpeggio_shapes.SEED_SHAPES` and live beside them.
+This is the heart of the epic. The B0 capture (`melete#188`), reading the
+instructor's own tapped-triad playing, established that the two-hand choreography
+for the triads is **one universal box**, not a table of per-`(quality, inversion)`
+shapes. The vocabulary is that single box plus the four triads' chord intervals.
 
-**Structure.** For each of the four triads (`maj`, `min`, `dim`, `aug`), and each
-of its inversions (root, first, second — a triad has no third inversion), a shape
-is an ordered sequence of chord-tone placements, each carrying:
+**The box.** Relative to a box root at `(string S, fret F)`, on an instrument in
+perfect fourths:
 
-- **hand** — `LEFT` or `RIGHT` (the partition; see below);
-- **finger** — 1–4 of that hand;
-- **string offset** and **fret offset** — the tone's position relative to the
-  shape's anchor, from which `box` derives the absolute `(string, fret)` while
-  honouring each hand's `position_span`.
+| # | Chord tone | String | Hand | Finger | Fret |
+|---|---|---|---|---|---|
+| 1 | root | `S` | `LEFT` | ring (3) | `F` |
+| 2 | third | `S+1` | `LEFT` | index (1) | derived |
+| 3 | fifth | `S+1` | `RIGHT` | index (1) | derived |
+| 4 | octave-root | `S+2` | `RIGHT` | middle (2) | `F+2` |
 
-The pitch of each placement is the triad's own chord tone at the journey's
-current register (pitch preserved, §4); the shape supplies only *where and how*,
-not *which pitch*.
+**Strings, hands, and fingers are fixed and identical across `maj`/`min`/`dim`/
+`aug`.** Only the third and fifth frets vary, and they are **derived, not
+tabulated**: a chord tone `i` semitones above the root, on a string tuned a fourth
+(5 semitones) higher, sits at `F + i − 5`; the octave-root two fourths up sits at
+`F + 2`. This is the two-hand analogue of the one-hand `arpeggio_shapes._seed`
+derivation, and it preserves pitch by construction. The chord intervals come from
+`theory.CHORDS`; nothing here branches on quality.
 
-**The partition is data, not a derived rule.** The v1.0 spec split notes to hands
-by a fixed "low frets → left, high frets → right" geometric rule and claimed it
-reproduced every surveyed shape. Player testimony contradicts that: the hands
-**fold across each other and leapfrog**, and *which* scale degree each hand voices
-**changes with every inversion**. In a root-position minor shape the left hand may
-voice the root and third while the right voices the fifth and the next root; at
-the next inversion the left hand takes both thirds and the right keeps the fifth
-and root — a reassignment no single fret-region rule produces. So each shape
-**names its own partition explicitly**, and the leapfrog is simply the sequence of
-those per-inversion partitions as the journey climbs. (No global fret-ordering
-invariant such as "every left fret below every right fret" holds — the hands
-cross; see §11 decision 6.)
+**Tiling and the leapfrog.** Boxes tile up the neck by octave: box *N*'s
+octave-root **is** box *N+1*'s root, retapped by the left ring. Within any one box
+the lower pair (root, third) is the left hand and the upper pair (fifth,
+octave-root) the right — "low left, high right" holds *per box* — but the shared
+root means the same pitch is the right-hand octave-root of one box and the
+left-hand root of the next. That overlap, folding the hands across each other, **is**
+the leapfrog; there is **no global fret-ordering invariant** (§11 decision 6).
 
-**Provisional and instructor-gated.** These shapes are musical judgement, not
-code. They are marked PROVISIONAL and confirmed by the instructor before the
-generated sheets are trusted, exactly as `arpeggio_shapes.py`'s one-hand seed
-shapes are gated on `melete#152`. The plan gives the tap-shape data its **own
-validation task** so the code can land and be tested against the shapes as
-authored while the musical confirmation proceeds in parallel.
+**Represented as data, though derivable.** The box is small enough to derive, but
+it is kept as data — a `TAP_BOX` structure giving each of the four positions'
+string-offset, hand, and finger, with frets computed from the chord tones — so the
+deferred work is additive: alternate augmented voicings and the seventh-chord box
+are new data, not new code (§12).
 
-**Coverage note — dim and aug are required.** The four triads are not
-interchangeable in priority: diminished and augmented are load-bearing because so
-much of the course material derives from the harmonic-minor scale and its modes,
-where those triads dominate. v1 must ship working `dim` and `aug` tap shapes, not
-only `maj`/`min`.
+**Provisional and instructor-gated.** The captured box is confirmed by Task E1
+before generated sheets are trusted, exactly as the one-hand seed shapes are gated
+on `melete#152`.
+
+**Coverage — dim and aug fall out of the same box.** Diminished and augmented are
+load-bearing for the harmonic-minor-derived material; because the box realizes all
+four triads by construction (only the derived third/fifth frets differ), shipping
+`dim`/`aug` is not extra work.
 
 ## 6. Placement: the two-hand box and the tapped journey
 
@@ -281,50 +289,44 @@ family, axes)` places pitches under a *single* pinned anchor and raises when the
 fretted span exceeds `profile.position_span` (issue #57); it already reserves the
 two-anchor case for this epic, raising `NotImplementedError` naming #67 for any
 `len(anchors) != 1`. This epic realizes that path: given two anchors (left lower,
-right higher) and the shape's per-tone hand assignment, it places each hand's
+right higher) and the box's per-tone hand assignment, it places each hand's
 tones near that hand's anchor, requires each hand's fretted span to satisfy
 `position_span`, requires both hands non-empty, preserves pitch, and returns each
 note's `(string, fret, hand)`. The single-hand path is untouched — the two-hand
 case is the `anchors` count, not a mode of the one-hand logic — so the existing
-placement tests remain its guard (§10). Unlike the v1.0 design, the partition is
-**supplied by the shape**, not derived inside `box`; `box` owns only the reach
-math, keeping it the one place that counts hands and honours `position_span`.
+placement tests remain its guard (§10). The partition is **supplied by the caller**
+(the box, §5), not derived inside `box`; `box` owns only the reach math, keeping
+it the one place that counts hands and honours `position_span`.
 
 **The tapped journey.** The `arpeggios` tapped-journey driver produces the same
 coherent up-and-down traversal the one-hand family produces — the triad walked
-across the neck outer-string-to-opposite-outer and back — but at each step it
-realizes the current inversion's tap shape via `box`'s two-anchor path, stamping
-`hand`, `finger`, and (via legato, below) `attack`. The driver is
-quality-agnostic: it reads the shape for `(quality, inversion)` and applies it,
-so `dim` and `aug` are data entries, not code paths.
+across the neck outer-string-to-opposite-outer and back — by **tiling the box up
+the chord tones** (§5): it places an octave box via `box`'s two-anchor path, then
+advances to the next octave (the box's octave-root becomes the next box's root,
+`+2` strings) and repeats, then reverses. This is the two-hand analogue of the
+one-hand `arpeggio_shapes.shape_places` tiling. The driver is quality-agnostic —
+it reads the triad's chord intervals and the one `TAP_BOX`; `dim`/`aug` are data,
+not code paths.
 
-**The v1 chaining rule (deterministic).** The driver walks the inversions in
-ascending order — root, first, second, then repeating — one tap shape per octave
-register, anchoring each shape at the lowest string that sounds its lowest tone
-at that register. It climbs until the next shape's tones would leave the neck or
-fail `box`'s two-anchor `position_span`, then reverses back down the same shapes.
-This is a deliberately minimal rule, chosen so the tapped journey is
-**deterministic and testable** in v1; the exact anchor progression is confirmed
-against the tabulated shapes during implementation. Choosing anchors *optimally*
-across many octaves — the general leapfrog-climb problem — is the deferred hard
-part (§12), and the raise condition above is the mechanical boundary between what
-v1 lays out and what it refuses.
+**The v1 tiling rule (deterministic).** The driver anchors the first box at the
+triad root on the lowest string that sounds it, then tiles boxes upward `+2`
+strings / `+2` frets per octave until the next box's tones would leave the neck or
+fail `box`'s two-anchor `position_span`, then reverses back down the same boxes.
+Deterministic and testable; the raise condition is the mechanical boundary between
+what v1 lays out and what it refuses. Optimising anchors for shapes the box does
+not cover — alternate voicings, sevenths — is deferred (§12).
 
-**The multi-position climb is the honest hard edge.** Choosing anchors as the
-two-hand shape ascends the neck across the journey is where this is genuinely
-difficult, and v1 solves only as far as the tabulated shapes and the corpus
-support. A journey position that cannot be laid out under two hands **raises**
-rather than forcing a bad fingering, and §9's validity gate resamples. This
-mirrors #72's one-hand journey, which likewise raises (rather than truncating)
-when a run cannot be reached.
+**Reach and the neck bound it.** Because the box is a fixed two-hand reach, the
+climb is bounded only by the neck and each hand's `position_span`; a box that would
+run off the neck **raises** rather than forcing a bad fingering, and §9's validity
+gate resamples — as #72's one-hand journey already does when a run cannot be
+reached.
 
-**Legato.** Within a hand's run of consecutive notes on the *same string*, the
-first is `TAPPED` and the rest are `SLURRED` — a hammer-on where the fret
-ascends, a pull-off where it descends. Any string change (or hand change) forces
-a fresh `TAPPED`. This is derived from geometry, not tabulated per shape (§11
-decision 7), and it runs **after the fitter** on the final tiled voice, so a note
-the fitter repeated or dropped still yields a correct first-`TAPPED`-per-run
-rather than a stranded slur (§3).
+**Legato.** The triad default taps **every** note — the captured example carries
+no hammer-on/pull-off — so for v1 no note is `SLURRED`. The derived-legato pass
+(first note of a same-string, same-hand run `TAPPED`, the rest `SLURRED`; a string
+or hand change forces a fresh `TAPPED`) remains wired **after the fitter** (§3) for
+future slur-based styles, but is a **no-op** for the all-tapped triad boxes.
 
 ## 7. Selection and configuration
 
@@ -410,9 +412,9 @@ than a resampled one, because the label is the part a student trusts.
 | `Note` defaults | Unit: a default-constructed note is `(LEFT, PLUCKED)`; existing family tests unchanged. |
 | `box` single-hand | Regression: identical output to pre-change for every existing input (the central guard that the one-hand path is untouched). |
 | `box` two-anchor | Property: each hand's fretted span ≤ `position_span`; both hands non-empty; every note on a string that sounds its pitch; the supplied partition is honoured. |
-| Tap-shape vocabulary | Unit: every (triad × inversion) has a shape; each shape's pitches are exactly the triad's chord tones; each note carries a hand and a 1–4 finger. |
-| Tapped-journey placement | Property: the emitted pitch multiset equals the triad's `theory.chord_pitches` tiled across the journey's register; both hands used; no note `PLUCKED`. |
-| Legato derivation | Golden: same-string ascending run ⇒ one `TAPPED` then `SLURRED` hammers; descending ⇒ pull-offs; string/hand change ⇒ fresh `TAPPED`. |
+| The `TAP_BOX` | Unit: the box has four positions with the fixed strings/hands/fingers of §5; applied to each triad, its derived frets sound exactly the triad's chord tones (root, third, fifth, octave-root) — identical structure across `maj`/`min`/`dim`/`aug`. |
+| Tapped-journey placement | Property: the emitted pitch multiset equals the triad's `theory.chord_pitches` tiled across the journey's register; both hands used; every note `TAPPED` (no `PLUCKED`, and no `SLURRED` in the triad default). |
+| Legato derivation | Unit (the pass in isolation): a same-string ascending run ⇒ one `TAPPED` then `SLURRED` hammers; descending ⇒ pull-offs; string/hand change ⇒ fresh `TAPPED`. Not exercised by the all-tapped triad default; retained for future slur styles. |
 | Selection constraint | A `hands: 2` draw never pairs with an unshaped quality; `hands` is recorded in the session log and replays. |
 | `restamp` slur | A slurred note is never accented, for any accent pattern. |
 | Emitter | Golden alphaTex for one tapped triad arpeggio, byte-compared; default `PLUCKED`/`LEFT` notes emit exactly as before. |
@@ -431,16 +433,16 @@ against.
 
 | # | Decision | Rationale |
 |---|---|---|
-| 1 | Tapping is a **tabulated tap-shape vocabulary** for `arpeggios`, not a derived cross-cutting modifier. | Player testimony: the two-hand choreography leapfrogs per inversion and is not derivable from a simple rule. Tabulation is the only honest v1, and it is how the instances needed for a future derivation are accumulated (§12). Supersedes v1.0 decisions 1 and 3. |
+| 1 | Tapping is realized as a **single universal two-hand box**, kept as data and tiled up the arpeggio — not a derived cross-cutting modifier, and not per-`(quality, inversion)` shapes. | The B0 capture (`melete#188`) showed the four triads share one box whose third/fifth frets derive from the chord intervals + fourths tuning. Keeping it data (not code) makes the deferred alternates/sevenths additive (§12). Supersedes v1.0 decisions 1/3 and the v2.0 "tabulated per-inversion shapes" framing. |
 | 2 | The hand count is bounded at two, not modelled as N. | One or two hands is the entire musical space; "N hands" is speculative generality. `Hand` is a two-valued enum on purpose. |
-| 3 | Placement happens at **family generation**, where the inversion is known — not after the fitter. | The choreography is inversion-indexed; a post-fitter modifier would have to reconstruct inversion structure from a flattened, lever-adjusted voice. Reverses v1.0's "run tapping after the fitter." |
+| 3 | Placement happens at **family generation**, where the chord-tone structure is known — not after the fitter. | The box tiles the triad's chord tones; a post-fitter modifier would have to reconstruct that structure from a flattened, lever-adjusted voice. Reverses v1.0's "run tapping after the fitter." |
 | 4 | `hand` and `attack` are two orthogonal `Note` fields. | Hand and attack vary independently — either hand taps, a slur occurs under either hand — matching GPIF's independent note properties. Carried unchanged from v1.0. |
 | 5 | The two-hand placement is `box`'s reserved **two-anchor path**, not a new sibling function. | #72 already built `box` with an `anchors` count and reserved `len(anchors) == 2` for this epic (`NotImplementedError` naming #67). Realizing the reserved seam keeps the one-hand path byte-for-byte and the reach math in one place. Supersedes v1.0 decision 5 (`two_hand_boxed` sibling). |
-| 6 | The hand partition is **data in the shape**, not a geometric rule; no global fret-ordering invariant holds. | The hands fold across each other and the scale-degree→hand assignment changes per inversion, so "low frets left, high frets right" is false. **Reverses v1.0 decision 6**, which asserted the fret-region rule reproduced every shape. |
+| 6 | The hand partition is **fixed in the box** (root+third → left, fifth+octave-root → right); the leapfrog comes from box **overlap**, not a fret-region rule, and no global fret-ordering invariant holds. | Within a box "low left, high right" holds, but the shared root means a pitch is a right-hand octave-root in one box and a left-hand root in the next — the hands fold across each other across the journey. **Reverses v1.0 decision 6** (the fret-region rule) and refines v2.0's "per-inversion partition." |
 | 7 | Legato is derived from same-string (same-hand) adjacency, not tabulated. | Where a hand plays consecutive notes on one string, hammer/pull is the only idiomatic attack; deriving it keeps the shapes to *placement* and off *articulation*. Carried from v1.0 decision 7. |
 | 8 | Tapping is selected by **listing tapped triads as `arpeggios` quality candidates**; `hands` is **derived** from the drawn quality, not sampled. | The independent, recency-weighted sampler cannot express a hands↔quality coupling; a shared quality pool plus a derived `hands` makes an unshaped tapped pair unrepresentable without new selector machinery, and controllability comes from pool composition. Supersedes v1.0 decision 8; the freely-sampled `hands`/`range_octaves` axis it named was retired by #72. |
 | 9 | Only `arpeggios` is tapping-eligible in v1; `scales`, `intervals`, `chromatic` are not. | Scale tapping is a separate choreography deferred whole; intervals/chromatic have no tapped corpus, and chromatic's subject *is* its left-hand fingering. |
-| 10 | v1 tabulates the **four triads only** (`maj`, `min`, `dim`, `aug`); sevenths deferred. | Triads are the fundamental two-hand vocabulary and stay in one octave range. `dim`/`aug` are required for the harmonic-minor-derived material. Sevenths add an inversion and lean stretched. |
+| 10 | v1 covers the **four triads only** (`maj`, `min`, `dim`, `aug`), which share the one box; sevenths deferred to a next iteration. | The box realizes all four triads by construction (only the derived third/fifth frets differ), and `dim`/`aug` are required for the harmonic-minor-derived material. Sevenths add a chord tone and change the box, and need their own captured examples — a next iteration. |
 | 11 | v1 **preserves pitch** (same octave range); stretched/re-voiced shapes are deferred. | Octave-separating the hands changes which pitches sound — a higher-order complexity. Keeping pitch fixed keeps the central invariant (§10) and the "same exercise, re-placed" framing true. |
 | 12 | The renderer spike is a go/no-go run first; it now also settles **per-hand fingering**. | §4–§7 are verifiable without a renderer, but the tapped *sheet* depends on the spike; tap shapes assign fingers, so right-hand fingering is a first-class spike question, not a detail. Carried from v1.0 decision 10, widened. |
 
@@ -450,20 +452,20 @@ Named so the boundary is explicit and the design leaves room for each.
 
 - **Next version.** Scales tapping — its own choreography and shape vocabulary,
   reusing the shared two-hand `box`/legato mechanics this epic builds.
-- **Next version.** Seventh-chord tap shapes (`maj7`/`min7`/`dom7`/`m7b5`/`min6`),
-  adding a chord tone and a fourth inversion to the tabulated vocabulary.
+- **Next iteration.** Seventh-chord arpeggios (`maj7`/`min7`/`dom7`/`m7b5`/`min6`):
+  they add a chord tone and change the box, so they need their own captured
+  example and box — the explicit next step after the triads.
+- **Next version.** Alternate voicings (e.g. an alternate augmented box) — new box
+  data, not new code.
 - **Next version.** Stretched / re-voiced shapes that separate the hands across
   octaves (e.g. 1–5 left, 3–7 an octave up). These **change the sounding
   pitches**, so they relax the central invariant deliberately and need their own
   design.
-- **Next version.** A general solution to the multi-position two-hand climb —
-  choosing anchors as the shape ascends across many octaves. v1 lays out what the
-  tabulated shapes and corpus cover and raises beyond it (§6).
-- **Later.** **Deriving** the choreography algorithmically from the accumulated
-  tabulated shapes. The tap-shape module is represented as data specifically so a
-  derivation generator can replace hand-authored entries additively. The author's
-  intent is that, once the corpus is rich enough, the mathematical structure the
-  shapes reveal is itself a publishable contribution.
+- **Later.** **Deriving** the whole choreography algorithmically. The triad box
+  already derives its frets from the chord intervals, so derivation is *partly*
+  realized; the box is kept as data so a fuller generator (across alternates and
+  sevenths) is additive. Once the vocabulary is rich enough, the mathematical
+  structure it reveals is itself a publishable contribution.
 - **Later.** Integrating complex external tapping corpora (e.g. Charles
   Berthoud's exercises) as a stress test for the vocabulary and the eventual
   derivation.
@@ -472,10 +474,12 @@ Named so the boundary is explicit and the design leaves room for each.
   config weight.
 - **Never (as tapping).** Fretting-hand counts above two.
 
-## 13. What changed in the rebase
+## 13. What changed
+
+### v1.0 → v2.0 — the #72 rebase
 
 The v1.0 spec (2026-08-13) was written before epic #72 (the coherent up-and-down
-journey) landed. #72 rewrote exactly the seams tapping plugs into. This section
+journey) landed. #72 rewrote exactly the seams tapping plugs into. This table
 records the deltas so reviewers who read v1.0 can see what moved and why.
 
 | v1.0 assumption | Post-#72 reality | Consequence |
@@ -489,7 +493,20 @@ records the deltas so reviewers who read v1.0 can see what moved and why.
 | Multi-octave two-hand climb is a rare deferred edge. | Journeys span the whole neck, so multi-position placement is the common case. | The climb is confronted in v1 as far as the shapes/corpus support, raising beyond it (§6). |
 | Eligible families are `arpeggios` and `scales`; qualities follow the pool. | — | v1 narrows to `arpeggios` + the four triads, in one octave range (decisions 9, 10, 11). |
 
+### v2.0 → v2.1 — the universal box
+
+The v2.0 rebase assumed the vocabulary was a table of per-`(quality, inversion)`
+shapes, hand-authored and instructor-gated. The B0 capture (`melete#188`), reading
+the instructor's own tapped-triad example, corrected that.
+
+| v2.0 assumption | What B0 showed | Consequence |
+|---|---|---|
+| The vocabulary is 12 hand-authored `(quality × inversion)` shapes. | The four triads share **one universal box**; the third/fifth frets derive from the chord intervals. | B1 encodes one `TAP_BOX`, not 12 shapes; the driver tiles it (§5, §6, decision 1). |
+| The hand partition is authored per inversion and leapfrogs per inversion. | The partition is fixed in the box (root+third left, fifth+octave-root right); the leapfrog is box **overlap**. | Decision 6 refined; "inversion" is not a tabulated axis (§5). |
+| The driver walks inversions, one shape per octave register. | The driver tiles one box up the chord tones, `+2` strings/frets per octave. | §6 v1 tiling rule replaces the chaining rule. |
+| Tapped notes may be slurred (derived legato per shape). | The triad default taps **every** note — no hammer/pull. | Legato pass is a no-op for the default; retained for future styles (§6, §10). |
+
 ---
 
-**Status:** Draft (v2.0 rebase). Filed as epic
+**Status:** Draft (v2.1). Filed as epic
 [#67](https://github.com/mnemosys-project/.github/issues/67).
