@@ -8,16 +8,18 @@
 **Epic:** [`mnemosys-project/.github#67`](https://github.com/mnemosys-project/.github/issues/67)
 **Spec:** [`spec.md`](./spec.md) (v2.0 rebase)
 
-**Goal:** Add two-handed tapping to melete as a **tabulated triad tap-shape
-vocabulary** for the `arpeggios` family, so `arpeggios` exercises can be realized
-as two-hand tapped triads walked up and back across the neck.
+**Goal:** Add two-handed tapping to melete as a **universal two-hand box** for the
+`arpeggios` family, so `arpeggios` exercises can be realized as two-hand tapped
+triads walked up and back across the neck.
 
-**Architecture:** A curated tap-shape table (one two-hand choreography per triad ×
-inversion) drives a tapped-journey path inside the `arpeggios` family. Placement
-happens at family generation (where the inversion is known), realized through
-`box`'s reserved two-anchor path in `_shared`; articulation (`hand`, `attack`)
-and per-hand fingering are stamped there, with legato derived from same-string
-adjacency. Selection lists tapped triads as `arpeggios` quality candidates and
+**Architecture:** One universal two-hand box (root+third = left ring+index,
+fifth+octave-root = right index+middle; frets derived from the chord intervals),
+captured in B0 and identical across the four triads, drives a tapped-journey path
+inside the `arpeggios` family. Placement happens at family generation (where the
+chord-tone structure is known), realized through `box`'s reserved two-anchor path
+in `_shared`; `hand`/`finger` and per-hand fingering are stamped there. The triad
+default taps every note, so the derived-legato pass is a no-op for v1 but stays
+wired for future slur styles. Selection lists tapped triads as `arpeggios` quality candidates and
 derives `hands` from the drawn quality — no cross-axis selector machinery. The
 phases go data-model + renderer feasibility first, then the pure vocabulary and
 placement core (verifiable without a renderer), then selection/rhythm, then
@@ -187,14 +189,15 @@ to encode. Without it, B1 would encode guesses (most dangerously for `dim`/`aug`
 The formal per-shape confirmation still happens in Task E1; B0 is the elicitation
 that makes B1 encodable, E1 is the sign-off on the encoded result.
 
-### Task B1: The triad tap-shape vocabulary (data module)
+### Task B1: The two-hand tap box (data module)
 
 **Repo:** `mnemosys-project/melete`
 **Tracks issue:** reshapes `melete#147` (was "the tapping.reach modifier")
 **Blocked-by:** A2, B0
 
-The curated data at the heart of the epic (spec §5). It ships as **PROVISIONAL**
-and is confirmed by Task E1.
+The captured box at the heart of the epic (spec §5). It ships as **PROVISIONAL**
+and is confirmed by Task E1. B0 (`melete#188`) established that the four triads
+share **one universal box** — this task encodes it, not 12 per-inversion shapes.
 
 **Files:**
 
@@ -203,27 +206,28 @@ and is confirmed by Task E1.
 
 **Interfaces:**
 
-- Produces: `TAP_SHAPES: dict[tuple[str, str], TapShape]` keyed by
-  `(quality, inversion)` for `quality ∈ {maj, min, dim, aug}` and
-  `inversion ∈ {root, first, second}`. A `TapShape` is an ordered sequence of
-  chord-tone placements, each carrying `hand: Hand`, `finger: int` (1–4), and
-  `string_offset`/`fret_offset` relative to the shape anchor. A lookup helper
-  `tap_shape(quality, inversion) -> TapShape` raises a `ValueError` naming a
-  missing entry (spec §9).
+- Produces: `TAP_BOX` — the single universal box as four positions, each carrying
+  `role` (root / third / fifth / octave-root), `string_offset` (`0, 1, 1, 2`),
+  `hand: Hand` (`LEFT, LEFT, RIGHT, RIGHT`), and `finger: int` (`3, 1, 1, 2`).
+  Plus a helper `box_places(profile, root_place, quality) -> list[(string, fret,
+  hand, finger)]` that applies the box to a triad's chord tones, **deriving** each
+  fret from the chord interval + fourths tuning (pitch-preserving), for the four
+  triads `quality ∈ {maj, min, dim, aug}` (intervals from `theory.CHORDS`). Raises
+  a `ValueError` for an unsupported (non-triad) quality (spec §9).
 
-- [ ] **Step 1: Write the failing test** — every `(triad × inversion)` has a
-  shape; each shape's chord-tone set matches `theory.chord_pitches` for that
-  quality/inversion; every placement carries a `Hand` and a 1–4 `finger`; a
-  missing lookup raises.
+- [ ] **Step 1: Write the failing test** — the box has the four fixed positions of
+  spec §5 (strings `0,1,1,2`; hands `L,L,R,R`; fingers `3,1,1,2`); applied to each
+  triad, `box_places`' derived frets sound exactly that triad's chord tones (root,
+  third, fifth, octave-root); the structure is identical across `maj/min/dim/aug`;
+  a seventh quality raises.
 - [ ] **Step 2: Run and confirm failure** (`ModuleNotFoundError`).
-- [ ] **Step 3: Implement** the `TapShape` structure, the `TAP_SHAPES` table
-  (marked **PROVISIONAL — instructor-gated, Task E1**), and the lookup helper.
-  Encode the shapes **from B0's captured table** (`docs/reports/triad-tap-shapes-capture.md`),
-  not from a guess; any entry B0 left open stays out until captured, rather than
-  fabricated.
-- [ ] **Step 4: Run the vocabulary tests.**
+- [ ] **Step 3: Implement** the `TAP_BOX` structure and `box_places`, encoding the
+  box **from B0's capture** (`docs/reports/triad-tap-shapes-capture.md`,
+  `melete#188`) and marked **PROVISIONAL — instructor-gated, Task E1**. Derive the
+  frets from the chord intervals; do not hand-tabulate them.
+- [ ] **Step 4: Run the box tests.**
 - [ ] **Step 5: REFACTOR**, then commit
-  `vrg-commit --type feat --scope families --message "add the provisional triad tap-shape vocabulary (#67)"`
+  `vrg-commit --type feat --scope families --message "add the provisional two-hand tap box (#67)"`
 
 ### Task B2: Realize `box`'s two-anchor path
 
@@ -278,20 +282,21 @@ and is confirmed by Task E1.
 
 **Interfaces:**
 
-- Consumes: `TAP_SHAPES`/`tap_shape` (B1); `box`'s two-anchor path (B2);
+- Consumes: `TAP_BOX`/`box_places` (B1); `box`'s two-anchor path (B2);
   `theory.chord_pitches`; `melete.score.Hand`, `Attack`.
 - Produces: (a) a tapped-journey path in `arpeggios.generate` that, for a triad
-  quality, walks the inversions up and back across the neck (spec §6's v1
-  chaining rule), realizes each inversion's tap shape via `box`'s two-anchor
-  path, stamps `hand`/`finger`, marks every note `TAPPED`, and preserves the
-  pitch multiset; and (b) a **shared legato pass** run in `pipeline.realize`
-  **after the fitter** (`layout.plan_voice`) and before `rhythm.restamp`, which
-  converts each hand's same-string-run followers to `SLURRED` (string/hand change
-  forces a fresh `TAPPED`). Legato runs post-fitter so a lever-repeated or
-  -dropped note gets correct first-attack-per-run articulation (spec §3, §6). A
-  seventh quality continues to use the existing one-hand `shape_places` journey.
-  The driver is quality-agnostic — `dim`/`aug` are data lookups, not code
-  branches.
+  quality, **tiles the box up the chord tones** up and back across the neck (spec
+  §6's v1 tiling rule: anchor at the root on the lowest string, climb `+2`
+  strings/`+2` frets per octave via `box`'s two-anchor path, reverse), stamps
+  `hand`/`finger`, marks every note `TAPPED`, and preserves the pitch multiset;
+  and (b) a **shared legato pass** run in `pipeline.realize` **after the fitter**
+  (`layout.plan_voice`) and before `rhythm.restamp`, which converts each hand's
+  same-string-run followers to `SLURRED` (string/hand change forces a fresh
+  `TAPPED`) — a **no-op for the all-tapped triad default** but kept for future
+  slur styles, and run post-fitter so a lever-repeated or -dropped note gets
+  correct first-attack-per-run articulation (spec §3, §6). A seventh quality
+  continues to use the existing one-hand `shape_places` journey. The driver is
+  quality-agnostic — `dim`/`aug` are data, not code branches.
 
 - [ ] **Step 1: Write the failing tests** — a triad generate produces a journey
   whose pitch multiset equals `theory.chord_pitches` tiled across the register;
@@ -446,10 +451,10 @@ and is confirmed by Task E1.
 **Blocked-by:** B1 (data authored); may run in parallel with C–D
 
 A live check, not a code change (like `melete#152` for the one-hand seed shapes).
-The instructor confirms each `(triad × inversion)` tap shape against how the
-material is actually played; confirmed shapes drop the `# PROVISIONAL` marker.
+The instructor confirms the box applied to each triad against how the material is
+actually played; the confirmed box drops its `# PROVISIONAL` marker.
 
-- [ ] **Step 1:** Render a reference sheet per triad × inversion from `TAP_SHAPES`.
+- [ ] **Step 1:** Render a reference sheet per triad (the box tiled up) from `TAP_BOX`.
 - [ ] **Step 2:** Review each with the instructor; record confirmations and
   corrections in the epic.
 - [ ] **Step 3:** Apply confirmed corrections to `arpeggio_tap_shapes.py` (a
@@ -519,5 +524,13 @@ Proposed — to be actioned on approval, not before:
 **Required. Append as the epic runs, not at the end.** One entry per deviation —
 what changed and, above all, *why*.
 
-<!-- (no entries yet — implementation has not started; this plan is the v2.0
-rebase of the pre-#72 plan) -->
+- **2026-08-15 — B0 capture collapsed the vocabulary to one box (spec v2.0→v2.1).**
+  B0 (`melete#188`) captured the instructor's own tapped-triad example
+  (`build/argeggio-tapping-examples.gp`) and it showed the four triads share **one
+  universal box** — root+third on the left hand (ring, index), fifth+octave-root
+  on the right (index, middle), with the third/fifth frets **derived** from the
+  chord intervals + fourths tuning. *Why it matters:* B1 encodes one `TAP_BOX`
+  (not 12 `(quality × inversion)` shapes) and B3 tiles it up the chord tones; the
+  triad default taps every note, so the legato pass is a no-op for v1. Spec §5/§6,
+  decisions 1/3/6/10, and B1/B3 were revised to match (docs task `.github#81`).
+  Sevenths need their own captured box — an explicit next iteration.
