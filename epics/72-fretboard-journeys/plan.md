@@ -93,7 +93,7 @@ A task is not complete until this step has run and its tests are green afterward
 | `src/melete/families/intervals.py` | Same geometry treatment; drop `direction`/`string_set` | D2, E2 |
 | `src/melete/selection.py` | Anchor `root` on the lowest instrument string (`_realized`) | E1 |
 | `src/melete/config.py`, `src/melete/vocabulary.py` | Remove the three geometry axes and their registry/display entries | E2 |
-| `build/config.toml` | Drop the removed keys | E2 |
+| `examples/config.toml` | Drop the removed keys | E2 |
 | `tests/alphatab/golden/…` | Re-frozen five-exercise goldens | F1 |
 
 ---
@@ -786,14 +786,14 @@ that nothing reads them, and migrate the shipping config so it still loads.
   longer sampled or displayed; titles no longer state direction)
 - Modify: `src/melete/families/_shared.py` (remove `boxed`, `string_set`,
   `octaves`, `RANGE_OCTAVES` — all superseded)
-- Modify: `build/config.toml` (drop `directions`, `string_sets`, `string_traversals`
+- Modify: `examples/config.toml` (drop `directions`, `string_sets`, `string_traversals`
   where it is a scale/arpeggio set, and `octaves` from every pool)
 - Test: `tests/test_config.py`, `tests/test_vocabulary.py`
 
 **Interfaces:**
 
 - Produces: a config carrying `directions`, `string_sets`, or `octaves` under any
-  pool fails `_reject_unknown` (spec §11); `build/config.toml` loads and
+  pool fails `_reject_unknown` (spec §11); `examples/config.toml` loads and
   `melete generate` runs against it.
 
 - [ ] **Step 1: Write the failing tests**
@@ -820,7 +820,7 @@ def test_arpeggio_traversal_key_is_now_unknown(tmp_path):
 
 
 def test_shipping_config_loads(tmp_path):
-    load("build/config.toml")   # the migrated file loads cleanly
+    load("examples/config.toml")   # the migrated file loads cleanly
 ```
 
 (`_write_config` follows the existing `tests/test_config.py` fixtures.)
@@ -834,7 +834,7 @@ def test_shipping_config_loads(tmp_path):
   `_OCTAVES` axis constants and the `_string_set` helper (keep `_TRAVERSAL`, still
   used by scales); remove the `"direction"` entry from `vocabulary.AXES`; delete
   `_shared.boxed`/`string_set`/`octaves`/`RANGE_OCTAVES`; and edit
-  `build/config.toml` to drop `directions`, `string_sets`, `octaves` from every
+  `examples/config.toml` to drop `directions`, `string_sets`, `octaves` from every
   pool and `traversals` from `[pool.arpeggios]` only.
 
 - [ ] **Step 4: Run and confirm pass**, plus `vrg-container-run -- vrg-validate`
@@ -906,4 +906,48 @@ family rewrite and E1, because it removes the axes they stopped reading.
 **Required. Append as the epic runs, not at the end.** One entry per deviation —
 what changed and, above all, *why*.
 
-<!-- (no entries yet — implementation has not started) -->
+- **Config path was `examples/config.toml`, not `examples/config.toml`.** The plan
+  named `examples/config.toml` (a local build artifact); the repo's shipping config
+  the tests and CLI load is `examples/config.toml`. E2 (#172) migrated the correct
+  file. Plan references corrected by this task (`.github#76`).
+- **Family AXES trimmed but config axes removed only in E2 → the pool-vs-family
+  meta-test needed a transitional relaxation.** Dropping an axis from a family's
+  `AXES` (B2/C2/D1/D2) while config still sampled it broke
+  `test_config.py::test_the_pool_samples_exactly_the_axes_each_family_requires`.
+  D1 (#176) relaxed it to "family axes ⊆ pool, surplus must be a retiring epic-#72
+  axis"; E2 (#172) removed the axes and un-relaxed it back to strict equality. This
+  kept `develop` green between the family rewrites and the consolidated removal.
+- **The acceptance goldens were a moving target during the epic.** Every
+  output-changing task drifts the byte-for-byte goldens, so they were quarantined
+  via `xfail` up front (#162/#166) and re-frozen once at the end (#183/#184), not
+  per task. The quarantine was **under-scoped**: it missed the render-layout
+  golden (`test_the_rendered_book_lays_out_one_system_per_exercise`), which drifts
+  once *any* exercise's bar count changes — B2/C2 extended the `xfail` to it, and
+  #175 rewired it to a live emit→render check.
+- **Tuning-arithmetic literals in the plan's tests were wrong.** Several plan tests
+  used pitch `46` for "Bb on the low B string, fret 11", but `bass6` string 0 is
+  B0 = 23, so fret 11 sounds pitch `34` (Bb1). The implementations were correct;
+  A1 (#163) and E1 (#167) fixed the test literals. Prefer structural assertions
+  (`tuning[s]+fret == pitch`) over hard-coded pitches.
+- **A combine-time failure surfaced only when the trio (B2/C2/D2) merged.** With
+  all three families' `AXES` trimmed, `range_octaves`/`string_set` were read by no
+  family, so `test_cli_query`'s omitted-range-axes set changed and `_shared.octaves`
+  /`string_set` became orphaned (coverage < 100%). Reconciled on C2's PR (#171);
+  the orphaned helpers and their bridge tests were deleted by E2 (#172).
+- **`intervals` uses `boxed_span`, not `per_string`.** `per_string` drifts frets on
+  chromatic interval content (a 3-semitone step vs the 5-semitone string gap) and
+  pushes partners off the neck; D2 (#170) switched to a compact `boxed_span`
+  placement. It also exposed a latent `boxed_span` error-message bug (raw
+  `min() empty` when the first pitch isn't on string 0), fixed as a follow-up
+  (#173/#180).
+- **Engraving fixes folded into #72 as direct fallout.** The longer journeys made
+  the rigid one-system-per-exercise layout and the 2/4 meter choice visibly wrong.
+  Rather than a separate epic, four small layout tasks were added: skip 2/4 (#174),
+  2/4 as a true last resort via a `_quality` penalty (#178), wrap exercises into
+  ~4-bar systems (#175), and distribute those systems evenly so no line is left
+  with a lonely single bar (#181). The renderer-boundary scope of the spec was
+  extended to `layout.py`/`emit.py` for these, by agreement.
+- **Arpeggio seed shapes are provisional.** Some low roots (e.g. D maj7, C maj7 on
+  the low string) genuinely raise because the seed's 5th/7th land at negative
+  frets — §9 resamples them. The one-tone-per-string diagonal shape is instructor-
+  validated at F1; a boxed alternative is a data-only change to `SEED_SHAPES`.
