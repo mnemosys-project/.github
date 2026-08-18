@@ -73,6 +73,11 @@ is calibrated. See [§12](#12-recorded-decisions), decision L8.
   registered beside the existing `Family` record.
 - The ladder draw in `selection.py`, including the new `deviation` pseudo-axis
   and its recency weighting.
+- A change to the `derive` contract: the hook fills only what is unset, rather
+  than deciding `hands` outright ([§3](#3-the-model-identity-deviation-ladder)).
+- `hands` joining `scales.AXES` and `arpeggios.AXES`, with `tapped_scale_types`
+  and `tapped_qualities` becoming `ELIGIBLE` preconditions on it rather than a
+  pseudo-pool beside `values`.
 - A measurement of the ladder validity rate, run **before** the gate is
   finalized.
 - `[ladder]` and `[challenge.<family>]` configuration, validated in `config.py`.
@@ -128,10 +133,22 @@ The provisional split, per family:
 |---|---|---|
 | `scales` | `root`, `scale_type`, `traversal` | `pattern`, `hands`, `accent_pattern`, `note_value_pattern` |
 | `arpeggios` | `root`, `quality` | `inversion`, `hands`, `pattern`, `accent_pattern`, `note_value_pattern` |
-| `intervals` | `root`, `interval`, `context` | `string_skip`, `pattern`, `accent_pattern`, `note_value_pattern` |
+| `intervals` | `root`, `interval`, `context`, **`scale_type` when `context == "diatonic"`** | `string_skip`, `pattern`, `accent_pattern`, `note_value_pattern` |
 | `chromatic` | `start_string`, `start_fret`, `span` | `permutation`, `string_traversal`, `shift`, `accent_pattern`, `note_value_pattern` |
 
-Two of these placements are judgment calls and are recorded as such.
+**Identity can be conditional.** `intervals.AXES` carries `scale_type`
+(`intervals.py:151-158`) and the family reads it in its diatonic branch only —
+`selection._CONDITIONAL_AXES` already records exactly that, and the selector's
+docstring argues at length that sampling it in the chromatic branch would credit
+§9's accounting with variety no exercise can hear. An identity declared as a
+fixed tuple would therefore either omit the axis — leaving a diatonic ladder to
+raise on every rung with `scale_type` unset — or draw it always and reintroduce
+the accounting defect. So `IDENTITY` is evaluated against the partially-drawn
+identity rather than being a fixed list, mirroring `_CONDITIONAL_AXES` instead of
+restating it. This makes identity and deviations symmetric: `ELIGIBLE` is the
+same idea on the deviation side, so the model gains no third concept.
+
+Two of the placements are judgment calls and are recorded as such.
 `traversal` is identity because the stretch fingering *is* the exercise — bare
 C Ionian three-notes-per-string is a drill, not a plain form of something else,
 and the positional version of the same scale is a different page rather than an
@@ -163,8 +180,35 @@ Each rung becomes an ordinary `ExerciseSpec`:
 
 ```
 params = identity | {axis: PLAIN[axis] for axis in deviation_axes} | rungs[k]
-params |= REGISTRY[family].derive(params, tapped)
+params |= REGISTRY[family].derive(params, tapped)     # fills only what is unset
 ```
+
+**`derive`'s contract changes, and it must.** Today the hook decides `hands`
+outright from the drawn `quality` or `scale_type`, and `selection.py:440` runs it
+last-write-wins:
+
+```python
+# scales.py:260-265 — unconditional on the identity
+if cast("str", scale_type) in tapped_scale_types:
+    return {HANDS: _TWO_HANDS, "traversal": _THREE_NOTE_PER_STRING}
+return {HANDS: _ONE_HAND}
+```
+
+Under a ladder that is a silent defect rather than a coupling: rung 1 sets
+`hands` to its plain value and `derive` overwrites it, so **every rung of a
+tapped-eligible ladder would be tapped, rung 1 included** — the sheet renders,
+the rungs differ in pattern and rhythm, and only playing it reveals that the
+plain scale was never played. The escalation fails precisely on the ladders this
+epic exists to showcase.
+
+So the hook becomes *given what has been decided, fill what follows*: an
+explicitly-set `hands` is respected, and `derive` supplies only the values that
+follow from it — the `traversal` pin and the `inversion` pin when `hands == 2`,
+and nothing at all when the rung has already spoken. A family that derives
+nothing is unaffected. This is the same seam
+[`melete#227`](https://github.com/mnemosys-project/melete/issues/227) needs to
+make one-hand triads reachable, so the two changes cooperate rather than
+conflict.
 
 This is the containment decision the whole epic rests on. **A ladder is a
 selection-time concept only.** `pipeline.realize`, `layout.py`, `rhythm.py`,
@@ -185,13 +229,31 @@ naming the module, and nothing anywhere else.
 ```python
 @dataclass(frozen=True)
 class Ladder:
-    identity: tuple[str, ...]
+    identity: Identity                            # drawn identity -> axes
     plain: Mapping[str, AxisValue]
     tiers: tuple[frozenset[str], ...]
     eligible: Eligibility
 ```
 
-**`identity`** — the axes fixed across the ladder.
+**`identity`** — the axes fixed across the ladder, evaluated against the
+identity drawn so far so a conditional axis can be expressed
+([§3](#3-the-model-identity-deviation-ladder)). Three families return a constant
+set; `intervals` returns `scale_type` only under `context == "diatonic"`.
+
+**A deviation axis is always a member of the family's `AXES` tuple.**
+`ELIGIBLE` gates whether a deviation is *offered*, never whether it *exists*.
+This rule is load-bearing because `config` validates pool keys against
+`REGISTRY[family].axes` (`config.py:375`): an axis outside `AXES` has no
+`[pool.<family>]` entry for [§5](#5-the-draw) step 5 to draw a value from, and
+`[challenge.<family>]` would reject it too. Without the rule an implementer
+reaches the first tapped ladder and has to invent a second place for candidate
+values to live — the drift the `Family` record exists to prevent.
+
+That rule has a consequence: **`hands` joins `scales.AXES` and
+`arpeggios.AXES`** with values `(1, 2)`. `[pool.scales] tapped_scale_types` and
+`[pool.arpeggios] tapped_qualities` stop acting as a pseudo-pool that lives
+beside `values` (`config.py:164-185`) and become what they already read as — an
+`ELIGIBLE` precondition on the `hands` deviation.
 
 **`plain`** — each deviation axis's plain value. `pattern: "straight"`,
 `accent_pattern: "none"`, `note_value_pattern: "straight"`, `inversion: "root"`,
@@ -245,14 +307,28 @@ against the within-session pushdown. What changes is what a slot fills.
    drawn. That ordering is the ladder.
 5. **Which values.** Each chosen deviation draws a non-plain value from its pool
    with the existing per-value weighting.
-6. **The challenge rung.** One further deviation, drawn from
-   `[challenge.<family>]` — a disjoint pool — and appended above the top
-   ordinary rung. It may also *re-draw* an already-active deviation's value from
-   the challenge pool, which is what lets the level++ rung be unfamiliar rather
-   than merely longer.
+6. **The challenge rung — escalate, by either route.** Appended above the top
+   ordinary rung, drawn from `[challenge.<family>]`, a disjoint pool. If the
+   menu still holds an unused deviation it **stacks** one; if it does not, it
+   **re-draws an active deviation's value** from the challenge pool. Both routes
+   reach the same goal, and neither is a fallback for the other.
 
 Exclusions are enforced during step 3: once `hands` enters the subset,
 `inversion` leaves the menu, and vice versa.
+
+**Why step 6 has two routes rather than one.** Menu exhaustion is not a corner
+case — it is the arithmetic of half of all `scales` ladders. The `scales` menu is
+four deviations (`pattern`, `hands`, `accent_pattern`, `note_value_pattern`) and
+`[ladder] rungs.scales = 4` draws `k = 3`. A tapped-eligible identity leaves one
+spare for the challenge rung; a **positional** identity has `hands` pruned by
+`ELIGIBLE`, leaving a menu of three, `k = 3`, and nothing to stack. `traversal`
+is drawn from two values, so roughly half of `scales` ladders land there.
+
+Defining the challenge rung as *escalation* rather than *stacking* removes the
+asymmetry where the last rung would mean something different depending on how
+much menu happened to be left. The value re-draw is arguably the better of the
+two anyway: on an already-tapped scale in groups of three, moving the pattern to
+`numeric_1235` is a sharper step than bolting a fourth axis onto the stack.
 
 ## 6. The validity gate
 
@@ -282,10 +358,8 @@ component is made contingent on a number rather than on an intuition.
 
 ```toml
 [ladder]
-chromatic = 4          # ordinary rungs, rung 1 (the plain shape) included
-scales    = 4
-arpeggios = 4
-intervals = 4
+# ordinary rungs per family, rung 1 (the plain shape) included
+rungs     = { chromatic = 4, scales = 4, arpeggios = 4, intervals = 4 }
 challenge = true       # append the level++ rung → 5 engraved exercises per slot
 
 [challenge.scales]
@@ -293,6 +367,14 @@ patterns            = ["numeric_1235", "fourths"]
 accent_patterns     = ["every_5", "displaced"]
 note_value_patterns = ["short_long"]
 ```
+
+The family counts nest inside `rungs` rather than sitting loose in `[ladder]`
+beside the `challenge` boolean, mirroring `[session] shape` (`config.py:549-559`)
+— the same shape of problem, already solved once in this codebase. Flat keys
+would put a reserved non-family name in a table `config` validates against
+`families.REGISTRY`, costing one hardcoded exemption forever, making a future
+family named `challenge` unreachable, and reading as though `challenge = 4` were
+meaningful when the boolean is global and the counts are per-family.
 
 `[challenge.<family>]` is validated exactly as `[pool.<family>]` is — same axis
 identifiers, same `vocabulary` check, same refusal to default an unwritten key.
@@ -387,8 +469,10 @@ names what could not be satisfied.
 
 | Condition | Behaviour |
 |---|---|
-| Drawn identity leaves fewer legal deviations than `[ladder] <family>` requires | Reject and resample the ladder through `MAX_ATTEMPTS`, as an unrealizable spec is rejected today |
+| Drawn identity leaves fewer legal deviations than `[ladder] rungs.<family>` requires | Reject and resample the ladder through `MAX_ATTEMPTS`, as an unrealizable spec is rejected today |
 | A family's entire deviation menu is smaller than its configured rung count | Loud configuration error naming the family, its menu size and its rung count — no draw could ever satisfy it |
+| The menu is exhausted when the challenge rung is drawn | **Defined behaviour, not an error**: the challenge rung re-draws an active deviation's value from `[challenge.<family>]` ([§5](#5-the-draw) step 6). Half of all `scales` ladders reach this |
+| `[challenge.<family>]` configures no axis the ladder can escalate — neither an unused menu axis nor an active one | Loud configuration error naming the family and the axes it would have needed; a challenge rung identical to rung 4 is the silent-degradation failure this table exists to prevent |
 | Any rung fails `max_notes` / `max_fret_span` | Reject and resample the ladder; the reason counter aggregates by rung index so `_over_constrained` can say *which* rung was the obstacle |
 | `[challenge.<family>]` names an axis the family does not read, or a value `vocabulary` does not know | Loud configuration error, identical treatment to `[pool.<family>]` |
 | `[challenge]` requested but no `[challenge.<family>]` section for a family in the shape | Loud configuration error; never a silent fallback to the everyday pool, which would produce a challenge rung indistinguishable from rung 4 |
@@ -409,6 +493,17 @@ while delivering none of it — the §13 failure mode this project exists to avo
   identity-plus-plain exactly.
 - **The `deviation` axis is tested like any other axis** against the existing
   recency-weighting tests: a deviation used today is drawn less often tomorrow.
+- **`derive` no longer overwrites a decided value** — rung 1 of a ladder whose
+  `scale_type` is in `tapped_scale_types` realizes **one-handed**, and rung 3
+  with `hands: 2` picks up the `traversal` and `inversion` pins. This is the
+  regression test for decision L11, and it is the one failure the acceptance
+  sheet would not reveal by eye.
+- **Conditional identity holds both ways**: a `context = "chromatic"` intervals
+  ladder never draws `scale_type` and never records a use of it; a
+  `context = "diatonic"` one draws it once and holds it across every rung.
+- **Challenge escalation on an exhausted menu**: a positional `scales` ladder at
+  `rungs = 4` produces a challenge rung that differs from rung 4 in at least one
+  deviation *value*, drawn from `[challenge.scales]`.
 - **Session round-trip**: write, read, `replay` — a replayed ladder is
   byte-identical to the recorded one.
 - **Configuration**: each row of [§10](#10-error-handling) has a test asserting
@@ -434,6 +529,11 @@ while delivering none of it — the §13 failure mode this project exists to avo
 | L8 | Day length, rung counts and tier membership ship untuned | The purpose of this iteration is to see the whole spectrum before calibrating it |
 | L9 | No back-compatibility for pre-epic `session.json` | Experimental project, gitignored logs, and `config_hash` re-seeds the draw regardless |
 | L10 | The simple whole-ladder resample gate ships first; a measurement task establishes whether repair is needed | Makes the most intricate component contingent on a number rather than an intuition |
+| L11 | `derive` respects an explicitly-set value and fills only what follows from it | Otherwise it overwrites a rung's plain `hands` and every rung of a tapped-eligible ladder taps — silently, and only detectable by playing it. Also the seam `melete#227` needs |
+| L12 | `IDENTITY` is evaluated against the drawn identity, not a fixed tuple | `intervals.scale_type` is identity only under `context == "diatonic"`; a fixed tuple either omits it (diatonic ladders raise) or draws it always (reintroduces the `_CONDITIONAL_AXES` accounting defect) |
+| L13 | Every deviation axis is an `AXES` member; `ELIGIBLE` gates offering, not existence | `config` validates pool keys against `Family.axes`, so an axis outside it has no candidate values to draw and no valid `[challenge.<family>]` entry |
+| L14 | The challenge rung escalates by stacking **or** by re-drawing an active deviation's value | Menu exhaustion is the arithmetic of roughly half of all `scales` ladders, not a corner case; one rule keeps the last rung meaning the same thing on every page |
+| L15 | Rung counts nest as `[ladder] rungs = { … }` | Mirrors `[session] shape`; keeps a reserved non-family name out of a table validated against `families.REGISTRY` |
 
 ## 13. Deferred
 
