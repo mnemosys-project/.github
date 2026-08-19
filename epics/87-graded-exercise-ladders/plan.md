@@ -494,7 +494,7 @@ def test_identity_and_deviations_partition_the_axes() -> None:
     """
     for name, family in REGISTRY.items():
         rhythm_axes = frozenset(rhythm.AXES)
-        deviations = frozenset(family.ladder.plain)
+        deviations = frozenset(family.ladder.plain(probe))
         for probe in _identity_probes(name):
             identity = family.ladder.identity(probe)
             covered = identity | deviations | rhythm_axes
@@ -566,6 +566,11 @@ type Identity = Callable[[Params], frozenset[str]]
 #: silently un-deviating an axis).
 type Eligibility = Callable[[Params, frozenset[str], frozenset[str]], frozenset[str]]
 
+#: A family's deviation axes and their plain values, given the drawn identity.
+#: All three draw-dependent fields of `Ladder` have this shape, so a reader
+#: learns one convention rather than three.
+type Plain = Callable[[Params], Mapping[str, AxisValue]]
+
 
 @dataclass(frozen=True)
 class Ladder:
@@ -584,11 +589,22 @@ class Ladder:
 
     #: The axes fixed for every rung, given the identity drawn so far.
     identity: Identity
-    #: Each deviation axis and its plain value. Membership defines the family's
-    #: deviation set, and every key is an `AXES` member (L13): `config`
-    #: validates pool keys against `Family.axes`, so an axis outside it has no
-    #: candidate values to draw and no valid `[challenge.<family>]` entry.
-    plain: Mapping[str, AxisValue]
+    #: Each deviation axis and its plain value, **given the identity**.
+    #: Membership defines the family's deviation set, and every key is an `AXES`
+    #: member (L13): `config` validates pool keys against `Family.axes`, so an
+    #: axis outside it has no candidate values to draw and no valid
+    #: `[challenge.<family>]` entry.
+    #:
+    #: A function rather than a flat mapping, for the same reason `identity` is:
+    #: the plain value can depend on what was drawn. A triad's plain hand count
+    #: is *two* today, because `arpeggio_shapes` carries no one-hand triad seed
+    #: shape — so a flat `hands: 1` would make every rung of every triad ladder
+    #: unrealizable, rejected, and resampled to exhaustion before surfacing as an
+    #: over-constrained pool. It does not bite while the shipped pools list only
+    #: sevenths, and it bites the day anyone adds `"maj"` to `qualities`. When
+    #: `melete#227` lands, the triad branch is deleted and nothing else moves,
+    #: which is the one-line change spec §13 promises.
+    plain: Plain
     #: The deviation axes in escalation order, drawn *within* a tier and never
     #: across it (L7). Rotation without ever producing a rung harder than the
     #: one after it.
@@ -650,14 +666,19 @@ def _eligible(
     return frozenset(offered)
 
 
-LADDER = Ladder(
-    identity=_identity,
-    plain={
+def _plain(_identity: Params) -> dict[str, AxisValue]:
+    """Every deviation's plain value. No scale type changes them."""
+    return {
         "pattern": _STRAIGHT,
         HANDS: _ONE_HAND,
         "accent_pattern": "none",
         "note_value_pattern": "straight",
-    },
+    }
+
+
+LADDER = Ladder(
+    identity=_identity,
+    plain=_plain,
     tiers=(
         frozenset({"pattern"}),
         frozenset({HANDS}),
@@ -698,15 +719,31 @@ def _eligible(
     return frozenset(offered)
 
 
-LADDER = Ladder(
-    identity=_identity,
-    plain={
+def _plain(identity: Params) -> dict[str, AxisValue]:
+    """Every deviation's plain value — which for `hands` depends on the quality.
+
+    A triad's plain hand count is **two**, because `arpeggio_shapes` carries no
+    one-hand triad seed shape (decision 10). Returning 1 here would make rung 1
+    of every triad ladder unrealizable: the ladder is rejected, resampled to
+    exhaustion, and reported as an over-constrained pool rather than as the
+    missing seed shape it is. It costs nothing while the shipped pools list only
+    sevenths and it fails the day anyone adds `"maj"` to `qualities`.
+
+    `melete#227` is the fix, and when it lands this branch is deleted and
+    nothing else moves — the one-line change spec §13 promises.
+    """
+    return {
         "inversion": INVERSIONS[0],
         "pattern": _STRAIGHT,
-        HANDS: _ONE_HAND,
+        HANDS: _TWO_HANDS if _is_triad(cast("str", identity["quality"])) else _ONE_HAND,
         "accent_pattern": "none",
         "note_value_pattern": "straight",
-    },
+    }
+
+
+LADDER = Ladder(
+    identity=_identity,
+    plain=_plain,
     tiers=(
         frozenset({"inversion", "pattern"}),
         frozenset({HANDS}),
@@ -715,6 +752,12 @@ LADDER = Ladder(
     eligible=_eligible,
 )
 ```
+
+A triad ladder therefore starts *tapped* and cannot escalate into tapping —
+`_eligible` must not offer `HANDS` when `_plain` already sets it to two, or the
+ladder would draw a deviation that changes nothing. Add that to `_eligible`'s
+triad branch, and the `test_identity_and_deviations_partition_the_axes` probe
+table gains a triad quality so the case is exercised.
 
 Use the module's existing straight-pattern constant for `"pattern"`; if it is
 spelled differently here than in `scales`, use this module's own name.
@@ -747,14 +790,18 @@ def _eligible(
     return frozenset({"string_skip", "pattern", "accent_pattern", "note_value_pattern"})
 
 
-LADDER = Ladder(
-    identity=_identity,
-    plain={
+def _plain(_identity: Params) -> dict[str, AxisValue]:
+    return {
         "string_skip": "0",
         "pattern": "ascending_pairs",
         "accent_pattern": "none",
         "note_value_pattern": "straight",
-    },
+    }
+
+
+LADDER = Ladder(
+    identity=_identity,
+    plain=_plain,
     tiers=(
         frozenset({"string_skip", "pattern"}),
         frozenset(),
@@ -794,15 +841,19 @@ def _eligible(
     )
 
 
-LADDER = Ladder(
-    identity=_identity,
-    plain={
+def _plain(_identity: Params) -> dict[str, AxisValue]:
+    return {
         "permutation": (1, 2, 3, 4),
         "string_traversal": "adjacent",
         "shift": _NO_SHIFT,
         "accent_pattern": "none",
         "note_value_pattern": "straight",
-    },
+    }
+
+
+LADDER = Ladder(
+    identity=_identity,
+    plain=_plain,
     tiers=(
         frozenset({"permutation"}),
         frozenset({"string_traversal", "shift"}),
@@ -1192,7 +1243,9 @@ def build(family, identity, *, rungs, tapped, draw_axes, draw_value, challenge):
         identity=dict(identity),
         rungs=tuple(accumulated),
         challenge=(
-            _challenge(declaration, identity, tapped, accumulated[-1], draw_value)
+            _challenge(
+                declaration, identity, tapped, accumulated[-1], draw_axes, draw_value, family
+            )
             if challenge
             else None
         ),
@@ -1207,21 +1260,35 @@ family, not a value to guess at.
 `_challenge` implements the two routes:
 
 ```python
-def _challenge(declaration, identity, tapped, top, draw_value):
-    """The level++ rung: stack an unused deviation, or re-draw an active one (L14)."""
+def _challenge(declaration, identity, tapped, top, draw_axes, draw_value, family):
+    """The level++ rung: stack an unused deviation, or re-draw an active one (L14).
+
+    **The axis is drawn, never picked.** An earlier draft took `sorted(...)[0]`
+    on both branches, which meant the challenge rung escalated the
+    alphabetically-first available axis every time — `accent_pattern` on
+    essentially every `scales` page. Deterministic tie-breaking is right for
+    *ordering within a tier*, where the tier has already fixed the difficulty;
+    it is wrong for *choosing which technique escalates*, and it would have made
+    the one rung the player is meant to find unfamiliar the only rung that never
+    varies. Drawing it also keeps the accounting honest: the selector records a
+    use on the `DEVIATION` axis for every deviation the ladder carries, and a
+    hardcoded axis would record a use no draw ever made.
+    """
     spare = declaration.eligible(identity, tapped, frozenset(top)) - frozenset(top)
-    if spare:
-        axis = sorted(spare)[0]
-        return {**top, axis: draw_value(axis, CHALLENGE)}
-    if not top:
+    candidates = sorted(spare) if spare else sorted(top)
+    if not candidates:
         msg = (
-            f"{declaration}: a challenge rung needs either an unused deviation or an "
+            f"{family}: a challenge rung needs either an unused deviation to stack or an "
             f"active one to re-draw, and this ladder has neither"
         )
         raise LadderError(msg)
-    axis = sorted(top)[0]
+    axis = draw_axes(candidates, 1)[0]
     return {**top, axis: draw_value(axis, CHALLENGE)}
 ```
+
+`sorted` survives only as the *candidate ordering* handed to `draw_axes`, which
+a weighted draw needs to be deterministic under a seed; the choice among them is
+the draw's.
 
 `materialize` composes identity, plain values and the rung's deviations, then
 lets the family's `derive` fill what follows — which after Task 1 never
@@ -1239,7 +1306,7 @@ def materialize(spec: LadderSpec, rung: int) -> dict[str, AxisValue]:
     declaration = REGISTRY[spec.family].ladder
     params: dict[str, AxisValue] = {
         **spec.identity,
-        **dict(declaration.plain),
+        **dict(declaration.plain(spec.identity)),
         **rungs_of(spec)[rung],
     }
     for axis, value in REGISTRY[spec.family].derive(params, frozenset()).items():
@@ -1335,6 +1402,20 @@ def test_challenge_pool_is_validated_like_an_ordinary_pool() -> None:
         """)
 
 
+def test_a_challenge_pool_that_cannot_escalate_is_refused() -> None:
+    """§10 row 4. Without this the draw resamples 500 times and reports an
+    over-constrained pool — the wrong problem, at the wrong layer."""
+    with pytest.raises(ConfigError, match=r"challenge\.scales.*could never escalate"):
+        load_string(HEADER + """
+            [ladder]
+            rungs = { scales = 4 }
+            challenge = true
+
+            [challenge.scales]
+            roots = [0, 1]
+        """)
+
+
 def test_challenge_requested_without_a_pool_for_a_shaped_family_is_refused() -> None:
     """A challenge rung silently identical to rung 4 is the failure §10 exists
     to prevent, so the absence is loud rather than a fallback to [pool]."""
@@ -1414,18 +1495,51 @@ def _ladder_fits_the_families(ladder: LadderConfig, shaped: Iterable[str]) -> No
     is.
     """
     for family, count in ladder.rungs.items():
-        menu = len(REGISTRY[family].ladder.plain)
+        menu = len(REGISTRY[family].ladder.plain(_widest_identity(family)))
         if count - 1 > menu:
             _fail(
                 f"ladder.rungs.{family}",
                 f"asks for {count} rungs, which needs {count - 1} deviations, but "
-                f"{family} declares only {menu} ({sorted(REGISTRY[family].ladder.plain)})",
+                f"{family} declares only {menu} deviations",
             )
 ```
 
 and, when `challenge` is true, that every family named in `[session] shape` has a
 `[challenge.<family>]` section — with the message saying explicitly that falling
 back to `[pool]` would make the challenge rung indistinguishable from rung 4.
+
+A third check covers §10's fourth row: a challenge section that exists but names
+**no axis the ladder could ever escalate**.
+
+```python
+def _challenge_can_escalate(family: str, pool: FamilyPool, ladder: LadderConfig) -> None:
+    """A challenge pool disjoint from the family's deviations is refused (spec §10).
+
+    Checked at load because the alternative is a misdiagnosis. Without it the
+    draw reaches `draw_value(axis, CHALLENGE)`, `_candidates` raises "configures
+    no candidate values", `_fill` counts that as a rejection reason, and the run
+    resamples `MAX_ATTEMPTS` times before reporting an over-constrained *pool* —
+    the wrong problem, at the wrong layer, after a visible delay, when the real
+    repair is a two-line configuration edit.
+
+    The intersection is with the family's whole declared deviation set rather
+    than with the axes a particular ladder happens to draw: this is the case no
+    draw could satisfy, and the narrower one is a per-draw rejection.
+    """
+    deviations = frozenset(REGISTRY[family].ladder.plain(_widest_identity(family)))
+    if not deviations & frozenset(pool.values):
+        _fail(
+            f"challenge.{family}",
+            f"configures {sorted(pool.values)}, none of which {family} grades on "
+            f"({sorted(deviations)}), so the challenge rung could never escalate anything",
+        )
+```
+
+`_widest_identity(family)` returns a representative identity for the family —
+the one that yields its largest deviation set. Both this check and
+`_ladder_fits_the_families` need it, so write it once, next to them, and give it
+a docstring saying it exists to ask "could *any* identity satisfy this?" rather
+than "does this one?".
 
 - [ ] **Step 5: Extend the configuration fingerprint**
 
@@ -1625,7 +1739,7 @@ def test_rung_one_is_the_plain_shape() -> None:
 
     for spec, _inputs in select(active, [], seeded(11)):
         plain = ladder.materialize(spec, 0)
-        for axis, value in REGISTRY[spec.family].ladder.plain.items():
+        for axis, value in REGISTRY[spec.family].ladder.plain(spec.identity).items():
             assert plain[axis] == value
 
 
@@ -1774,18 +1888,29 @@ Ref: mnemosys-project/.github#87"
 
 ---
 
-### Task 8: The reshaped session record
+### Task 8: The reshaped session record, and the replay path
 
-Spec §8, decision **L9** — clean reset, no back-compatibility.
+Spec §8, §11, decision **L9** — clean reset, no back-compatibility.
+
+The record and everything that reads it land together. `cli.ordered`
+(`cli.py:461-489`) walks `spec.params` to restore the drawn axis order, and both
+`replay` and `show` depend on it — its own docstring says why: without it a
+replayed sheet lists each exercise's axes in a different order than the sheet it
+reproduces, "the one visible difference between the two, in the one place a
+reader compares them." This task deletes `params` from the record, so leaving
+`ordered` to a later task would merge a green test suite over a broken `replay`.
 
 **Files:**
-- Modify: `src/melete/session.py` (`_document`, `_exercise`, `history`, `replay`)
-- Test: `tests/test_session.py`
+- Modify: `src/melete/session.py` (`_document`, `_exercise`, `_EXERCISE_KEYS`,
+  `history`, `replay`)
+- Modify: `src/melete/cli.py:461-489` (`ordered`), `:514` (`_replay`)
+- Test: `tests/test_session.py`, `tests/test_cli_query.py`
 
 **Interfaces:**
 - Consumes: Task 7's `LadderSpec`.
 - Produces: `Session.exercises: tuple[LadderSpec, ...]`; a `session.json` with
-  `identity`, `rungs` and `challenge` per exercise.
+  `identity`, `rungs` and `challenge` per exercise;
+  `cli.ordered(spec: LadderSpec) -> LadderSpec`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1856,6 +1981,48 @@ opens with applies unchanged to a rung's `permutation`.
 `_EXERCISE_KEYS` becomes `("family", "identity", "rungs")`, which is what makes
 a pre-ladder record fail by name.
 
+- [ ] **Step 3b: Make `ordered` and `_replay` rung-aware**
+
+`ordered` restores the drawn order across two levels now: identity axes in the
+family's declared `AXES` order, then each rung's deviations in the order they
+switched on. Keep its existing rule for an axis neither declares — kept at the
+end, never dropped, because "dropping a recorded parameter to tidy an ordering
+would be a silent loss of the thing being reproduced."
+
+`_replay` maps the recorded ladder through `ladder.rungs_of` and
+`ladder.materialize`, exactly as `_generate` does in Task 7 — the two must build
+the same scores from the same record or replay is not a reproduction. Extract
+that mapping into one helper both call rather than writing it twice; two private
+answers to "what scores does this slot engrave" is the disagreement Task 4's
+`rungs_of` docstring already argues against.
+
+- [ ] **Step 3c: Write the §11 replay round-trip test**
+
+```python
+# tests/test_cli_query.py
+
+def test_replay_reproduces_the_sheet_it_recorded(tmp_path: Path) -> None:
+    """§11's round-trip. Replay re-derives nothing (decision #14) — it reads the
+    record back, so the scores it builds must equal the ones that were written."""
+    generated = _generate_session(tmp_path, on=datetime.date(2026, 8, 18))
+    recorded = session.replay(tmp_path, datetime.date(2026, 8, 18))
+
+    replayed = [
+        cli._score(active, spec.family, ladder.materialize(spec, index))
+        for spec in recorded.exercises
+        for index in range(len(ladder.rungs_of(spec)))
+    ]
+
+    assert replayed == generated
+
+
+def test_ordered_restores_identity_then_switch_on_order(tmp_path: Path) -> None:
+    spec = cli.ordered(_alphabetised_ladder())
+
+    assert list(spec.identity) == ["root", "scale_type", "traversal"]
+    assert list(spec.rungs[2]) == ["pattern", "accent_pattern"]
+```
+
 - [ ] **Step 4: Add the module docstring paragraph**
 
 The docstring is this module's argument, so the reshape needs its own paragraph:
@@ -1866,7 +2033,7 @@ nothing).
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `pytest tests/test_session.py tests/test_cli_generate.py -v`
+Run: `pytest tests/test_session.py tests/test_cli_query.py tests/test_cli_generate.py -v`
 
 Expected: PASS.
 
@@ -1874,14 +2041,23 @@ Expected: PASS.
 
 ```bash
 vrg-container-run -- vrg-validate
-vrg-git add src/melete/session.py tests/test_session.py
+vrg-git add src/melete/session.py src/melete/cli.py tests/test_session.py \
+    tests/test_cli_query.py
 vrg-commit --type feat --scope session \
-  --message "record a ladder per slot (#87)" \
+  --message "record a ladder per slot, and replay it (#87)" \
   --body "Exercises gain identity, rungs and challenge. Rungs are recorded
 resolved rather than as diffs to be recomposed, per decision #14: replay
 re-derives nothing, it reads back what was drawn. challenge is its own key so a
 reader can identify the level++ exercise without consulting the configuration
 that produced it.
+
+cli.ordered and _replay land in the same commit rather than a later one. ordered
+walks spec.params, which this change deletes, and both replay and show depend on
+it — splitting them would merge a green suite over a broken replay. ordered now
+restores two levels of order (identity in declared order, then each rung's
+deviations in switch-on order) and _replay maps the record through the same
+rungs_of/materialize helper _generate uses, because the two must build identical
+scores or replay is not a reproduction.
 
 No back-compatibility and no version key (L9): a pre-ladder record fails loudly
 on the required-key check. The project is experimental, the logs live in
@@ -2071,11 +2247,31 @@ L14 Task 4, L15 Task 5.
 test, and the two report tasks (6 and 10) define their deliverable and the
 question it must answer rather than deferring it.
 
+**Alignment pass (paad:alignment, 2026-08-19).** Four issues, all applied:
+
+- §10's fourth row — a `[challenge.<family>]` naming no axis the family grades
+  on — had no implementation, so it would have surfaced 500 resamples later as
+  an over-constrained pool. Now a load-time check in Task 5
+  (`_challenge_can_escalate`), with `_widest_identity` shared with
+  `_ladder_fits_the_families`.
+- `cli.ordered` walks `spec.params`, which Task 8 deletes, and no task named it.
+  Task 8 now absorbs the whole replay path plus §11's round-trip test, rather
+  than merging a green suite over a broken `replay`.
+- The challenge rung picked `sorted(...)[0]`, escalating the alphabetically
+  first axis every time — `accent_pattern` on nearly every `scales` page,
+  contradicting §1's rotation goal on the one rung meant to be unfamiliar. The
+  axis is now drawn on the `DEVIATION` axis like every other.
+- `Ladder.plain` was a flat mapping, so `arpeggios` set `hands: 1` for triads —
+  unrealizable until `melete#227`, and rejected-then-resampled rather than
+  reported. `plain` is now identity-aware, matching `identity` and `eligible`,
+  and the triad branch is the single line `melete#227` deletes.
+
 **Type consistency.** `LadderSpec(family, identity, rungs, challenge)`,
 `ladder.build(...) -> LadderSpec`, `ladder.materialize(spec, rung) -> dict`,
 `ladder.rungs_of(spec) -> tuple[dict, ...]`, `ladder.DEVIATION`,
 `ladder.ORDINARY`, `ladder.CHALLENGE`, `families.Ladder(identity, plain, tiers,
-eligible)`, `Family.ladder`, `LadderConfig(rungs, challenge)`,
+eligible)` — all three of `identity`, `plain` and `eligible` taking the drawn
+identity — `Family.ladder`, `LadderConfig(rungs, challenge)`,
 `Config.ladder`, `Config.challenge` — used identically in Tasks 3 through 9.
 `derive(params, tapped)` keeps its signature throughout; only its contract
 changes, in Task 1.
