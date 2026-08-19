@@ -178,7 +178,7 @@ consulting the configuration that produced it.
 
 Each rung becomes an ordinary `ExerciseSpec`:
 
-```
+```text
 params = identity | {axis: PLAIN[axis] for axis in deviation_axes} | rungs[k]
 params |= REGISTRY[family].derive(params, tapped)     # fills only what is unset
 ```
@@ -437,7 +437,7 @@ Exercise numbering becomes two-level. `emit_book` names each exercise
 `N. <title>` today; a ladder makes that `N.k`, with the rung title stating what
 is active:
 
-```
+```text
 2.1  C Ionian — three-notes-per-string
 2.2  C Ionian — three-notes-per-string, groups of 3
 2.3  C Ionian — three-notes-per-string, groups of 3, tapped

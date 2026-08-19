@@ -52,12 +52,14 @@ overwrite rung 1's plain `hands`, tapping every rung of a tapped-eligible ladder
 while the sheet still renders and still passes goldens.
 
 **Files:**
+
 - Modify: `src/melete/families/scales.py:229-265` (`derive`)
 - Modify: `src/melete/families/arpeggios.py:226-268` (`derive`)
 - Modify: `src/melete/selection.py:440` (the final `params.update(...)`)
 - Test: `tests/families/test_scales.py`, `tests/families/test_arpeggios_tapping.py`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `derive(params: Params, tapped: frozenset[str] = frozenset()) ->
   dict[str, object]` — unchanged signature, new contract: **an axis already
@@ -224,7 +226,7 @@ In `selection._sample`, replace the last-write-wins update at `selection.py:440`
 
 Add to `_sample`'s docstring, after the existing paragraph about the hook:
 
-```
+```text
     The hook fills only what is unset (L11), so this final pass adds the axes the
     family derives that are not in its sampled list without overruling anything
     already decided. `setdefault` rather than `update` is the whole of that rule.
@@ -275,6 +277,7 @@ is filled from the hook and the pool is never consulted. The pool entry becomes
 load-bearing only in Task 7.
 
 **Files:**
+
 - Modify: `src/melete/families/scales.py:134-139` (`AXES`)
 - Modify: `src/melete/families/arpeggios.py:142-147` (`AXES`)
 - Modify: `src/melete/config.py:360-400` (`_AXES_BY_FAMILY`, a new `_HANDS` axis)
@@ -282,6 +285,7 @@ load-bearing only in Task 7.
 - Test: `tests/families/test_registry.py`, `tests/test_config.py`
 
 **Interfaces:**
+
 - Consumes: Task 1's `derive` contract.
 - Produces: `"hands"` present in `scales.AXES` and `arpeggios.AXES`;
   `[pool.scales] hands` and `[pool.arpeggios] hands` accepted by `config`,
@@ -460,12 +464,14 @@ each family's own declarations — never copies — so adding a fifth family sta
 one line of `REGISTRY`.
 
 **Files:**
+
 - Modify: `src/melete/families/__init__.py` (the `Ladder` record, `REGISTRY`)
 - Modify: `src/melete/families/scales.py`, `arpeggios.py`, `intervals.py`,
   `chromatic.py` (four declaration blocks)
 - Test: `tests/families/test_registry.py`
 
 **Interfaces:**
+
 - Consumes: Task 2's `AXES` tuples.
 - Produces:
   - `families.Ladder(identity, plain, tiers, eligible)`
@@ -902,10 +908,12 @@ declaration and a draw callback, produce the cumulative rung dictionaries. No
 config, no realization, no I/O.
 
 **Files:**
+
 - Create: `src/melete/ladder.py`
 - Test: `tests/test_ladder.py`
 
 **Interfaces:**
+
 - Consumes: `families.Ladder`, `families.REGISTRY`.
 - Produces:
 
@@ -1347,12 +1355,14 @@ Ref: mnemosys-project/.github#87"
 Spec §7, decision **L15**.
 
 **Files:**
+
 - Modify: `src/melete/config.py` (a `LadderConfig`, the `[ladder]` and
   `[challenge.*]` readers, `Config`, and `_fingerprint` in `session.py`)
 - Modify: `examples/config.toml`
 - Test: `tests/test_config.py`
 
 **Interfaces:**
+
 - Consumes: Task 3's `Ladder` declarations (for the menu-size check).
 - Produces:
   - `Config.ladder: LadderConfig` with `rungs: Mapping[str, int]` and
@@ -1645,11 +1655,13 @@ feature. It runs before the gate is wired so that per-deviation repair is built
 only if the measurement demands it — the epic's answer to complexity accretion.
 
 **Files:**
+
 - Create: `docs/reports/ladder-validity-rate.md`
 - Test: none (a measurement, not behaviour). The harness lives in
   `tests/test_fit_sweep.py`'s style but is run manually.
 
 **Interfaces:**
+
 - Consumes: `ladder.build`, `ladder.materialize`, `Config.ladder`.
 - Produces: a measured composite valid rate per family, and a recommended
   `MAX_ATTEMPTS`, cited by Task 7's docstring.
@@ -1709,12 +1721,14 @@ Spec §5. The slot now fills a `LadderSpec`, and the validity gate covers every
 rung.
 
 **Files:**
+
 - Modify: `src/melete/selection.py` (`select`, `_fill`, `_sample` → identity
   sampling, `_uses`, `_rejected`, `MAX_ATTEMPTS`'s docstring)
 - Modify: `src/melete/cli.py:262-293` (`_generate`), `:312` (`_score`)
 - Test: `tests/test_selection.py`
 
 **Interfaces:**
+
 - Consumes: Tasks 3–6.
 - Produces: `select(config, history, rng) -> list[tuple[LadderSpec, WeightInputs]]`
 
@@ -1836,7 +1850,7 @@ def _fill(family: str, config: Config, slot: _Slot) -> LadderSpec:
 `config.challenge[family].values` for `ladder.CHALLENGE`.
 
 `_rejected_ladder` materializes each rung, calls the existing `_rejected`, and
-prefixes the reason with `rung {index}: ` so the aggregated counter names the
+prefixes the reason with `rung {index}:` so the aggregated counter names the
 obstacle.
 
 - [ ] **Step 5: Record the right uses**
@@ -1901,12 +1915,14 @@ reader compares them." This task deletes `params` from the record, so leaving
 `ordered` to a later task would merge a green test suite over a broken `replay`.
 
 **Files:**
+
 - Modify: `src/melete/session.py` (`_document`, `_exercise`, `_EXERCISE_KEYS`,
   `history`, `replay`)
 - Modify: `src/melete/cli.py:461-489` (`ordered`), `:514` (`_replay`)
 - Test: `tests/test_session.py`, `tests/test_cli_query.py`
 
 **Interfaces:**
+
 - Consumes: Task 7's `LadderSpec`.
 - Produces: `Session.exercises: tuple[LadderSpec, ...]`; a `session.json` with
   `identity`, `rungs` and `challenge` per exercise;
@@ -2073,12 +2089,14 @@ Ref: mnemosys-project/.github#87"
 Spec §9.
 
 **Files:**
+
 - Modify: `src/melete/alphatab/emit.py:711-744` (`emit_book`)
 - Modify: `src/melete/cli.py:397-415` (`_preview`), `:590` (`phrase`), `_show`,
   `_replay`
 - Test: `tests/alphatab/test_emit.py`, `tests/test_cli_query.py`
 
 **Interfaces:**
+
 - Consumes: Task 7's `LadderSpec`, Task 8's records.
 - Produces: `emit_book(scores, cover, numbers: Sequence[str])` — the caller
   supplies each exercise's label, so the emitter never learns what a ladder is.
@@ -2170,6 +2188,7 @@ Spec §9. A question, not a feature; the output is an answer and a
 recommendation.
 
 **Files:**
+
 - Create: `docs/reports/alphatex-page-breaks.md`
 
 - [ ] **Step 1: Establish what exists**
